@@ -303,15 +303,30 @@ function findBuildingStateEntity(buildingKey: string): Entity | null {
   return null
 }
 
+const MAX_SPAWNS_PER_TICK = 50
+
 function brickSpawnSystem(dt: number) {
-  timeSinceSpawn += dt
-  if (timeSinceSpawn < BRICK_SPAWN_INTERVAL_S) return
-  if (countActiveBricks() >= MAX_ACTIVE_BRICKS) {
-    timeSinceSpawn = BRICK_SPAWN_INTERVAL_S
+  // Edge case: zero or negative interval -> one per tick (prevents infinite loop)
+  if (BRICK_SPAWN_INTERVAL_S <= 0) {
+    if (countActiveBricks() < MAX_ACTIVE_BRICKS) spawnBrick()
     return
   }
-  timeSinceSpawn = 0
-  spawnBrick()
+  timeSinceSpawn += dt
+  let spawned = 0
+  while (
+    timeSinceSpawn >= BRICK_SPAWN_INTERVAL_S &&
+    spawned < MAX_SPAWNS_PER_TICK
+  ) {
+    if (countActiveBricks() >= MAX_ACTIVE_BRICKS) {
+      // Cap accumulated time at one interval so a long downtime doesn't
+      // burst-spawn a flood once a brick is collected.
+      timeSinceSpawn = BRICK_SPAWN_INTERVAL_S
+      return
+    }
+    timeSinceSpawn -= BRICK_SPAWN_INTERVAL_S
+    spawnBrick()
+    spawned++
+  }
 }
 
 function countActiveBricks() {
