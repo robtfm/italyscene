@@ -6,7 +6,11 @@ import ReactEcs, {
   ReactEcsRenderer,
   UiEntity,
 } from '@dcl/sdk/react-ecs'
-import { getBrickCount, getPisaState, getMyContribution } from './setup'
+import {
+  getBrickCount,
+  getActiveBuildingState,
+  getMyContribution,
+} from './setup'
 import { room } from '../shared/messages'
 
 const greetings = ['Hi!', 'Good morning!', 'Lovely!', 'Goodness!', 'Good evening!']
@@ -37,8 +41,10 @@ const piazzaGreen = Color4.fromHexString('#0f8a4cff')
 const piazzaWhite = Color4.fromHexString('#f6f3ecff')
 const piazzaRed = Color4.fromHexString('#c8233bff')
 
+const COMPLETION_CELEBRATION_S = 10
+
 const uiComponent = () => {
-  const pisa = getPisaState()
+  const active = getActiveBuildingState()
   return (
     <UiEntity
       uiTransform={{
@@ -86,18 +92,29 @@ const uiComponent = () => {
         />
         <Label
           value={
-            pisa.collapsing
-              ? 'Tower of Pisa: COLLAPSING!!!'
-              : `Tower of Pisa: ${Math.round(pisa.riseProgress * 100)}%`
+            active === null
+              ? 'Building: …'
+              : active.collapsing
+              ? `${active.displayName}: COLLAPSING!!!`
+              : active.completedTime > 0
+              ? `${active.displayName}: COMPLETE — next in ${Math.max(
+                  0,
+                  COMPLETION_CELEBRATION_S - active.completedTime
+                ).toFixed(1)}s`
+              : `${active.displayName}: ${Math.round(
+                  active.riseProgress * 100
+                )}%`
           }
           fontSize={14}
-          color={pisa.collapsing ? piazzaRed : Color4.Black()}
+          color={active?.collapsing ? piazzaRed : Color4.Black()}
           uiTransform={{ width: '100%', height: 22 }}
         />
         <Label
-          value={`Lean: ${pisa.displayLean.toFixed(1)}°`}
+          value={`Lean: ${active ? active.displayLean.toFixed(1) : '0.0'}°`}
           fontSize={12}
-          color={pisa.displayLean > 25 ? piazzaRed : Color4.Black()}
+          color={
+            active && active.displayLean > 25 ? piazzaRed : Color4.Black()
+          }
           uiTransform={{ width: '100%', height: 18 }}
         />
         <Label

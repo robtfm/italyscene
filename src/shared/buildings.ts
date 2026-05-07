@@ -1,6 +1,8 @@
 export type BuildingConfig = {
   entityName: string
   baseEntityName: string
+  displayName: string
+  tier: number
   bricksRequired: number
   leanRatePerSec: number
   leanAxis: 'x' | 'z'
@@ -24,6 +26,8 @@ export type BuildingConfig = {
 export const PISA: BuildingConfig = {
   entityName: 'TowerOfPisa',
   baseEntityName: 'TowerOfPisa_Base',
+  displayName: 'Tower of Pisa',
+  tier: 1,
   bricksRequired: 30,
   leanRatePerSec: 0.6,
   leanAxis: 'x',
@@ -44,4 +48,29 @@ export const PISA: BuildingConfig = {
   naturalLeanDeg: 4,
 }
 
-export const BUILDING_CONFIGS: BuildingConfig[] = [PISA]
+export const COLOSSEUM: BuildingConfig = {
+  entityName: 'Colosseum',
+  baseEntityName: 'Colosseum_Base',
+  displayName: 'Colosseum',
+  tier: 2,
+  bricksRequired: 60,
+  leanRatePerSec: 0.4,
+  leanAxis: 'z',
+  leanSign: 1,
+  collapseAngleDeg: 25,
+  brickStraightenDeg: 3,
+  collapseRetentionRatio: 0.4,
+  buriedY: -0.5,
+  fullY: 4,
+  buriedScaleY: 2,
+  fullScaleY: 8,
+  collapseAngleEnd: 70,
+  collapseAnimDuration: 1.8,
+  collapseHoldDuration: 0.5,
+  collapseSinkDuration: 1.5,
+  collapseSinkDistance: 9,
+  riseStartLeanProgress: 0.5,
+  naturalLeanDeg: 0,
+}
+
+export const BUILDING_CONFIGS: BuildingConfig[] = [PISA, COLOSSEUM]

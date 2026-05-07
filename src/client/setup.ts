@@ -53,11 +53,35 @@ function brickHandlerSystem() {
   }
 }
 
+function getCurrentBuildingKey(): string | null {
+  for (const [_, ws] of engine.getEntitiesWith(WorldState)) {
+    return ws.currentBuildingKey
+  }
+  return null
+}
+
 function buildingVisualSystem(dt: number) {
-  for (const [entity] of engine.getEntitiesWith(BuildingState)) {
+  const activeKey = getCurrentBuildingKey()
+  for (const [entity, state] of engine.getEntitiesWith(BuildingState)) {
     const cfg = configForStateEntity(entity)
     if (!cfg) continue
-    applyBuildingVisual(cfg, entity, dt)
+    if (state.buildingKey === activeKey) {
+      applyBuildingVisual(cfg, entity, dt)
+    } else {
+      hideBuilding(cfg)
+    }
+  }
+}
+
+function hideBuilding(cfg: BuildingConfig) {
+  // Push the base far below ground; the cylinder follows since it's a child
+  const base = engine.getEntityOrNullByName(cfg.baseEntityName)
+  if (base) {
+    const bt = Transform.getMutableOrNull(base)
+    if (bt) {
+      bt.position.y = -50
+      bt.rotation = Quaternion.fromEulerDegrees(0, 0, 0)
+    }
   }
 }
 
@@ -139,18 +163,28 @@ export function getBrickCount(): number {
   return 0
 }
 
-export function getPisaState(): {
+export function getActiveBuildingState(): {
+  displayName: string
   riseProgress: number
   displayLean: number
   collapsing: boolean
-} {
+  completedTime: number
+  bricksRequired: number
+} | null {
+  const activeKey = getCurrentBuildingKey()
+  if (!activeKey) return null
+  const cfg = BUILDING_CONFIGS.find((c) => c.entityName === activeKey)
+  if (!cfg) return null
   for (const [entity, state] of engine.getEntitiesWith(BuildingState)) {
-    if (state.buildingKey !== 'TowerOfPisa') continue
+    if (state.buildingKey !== activeKey) continue
     return {
+      displayName: cfg.displayName,
       riseProgress: state.riseProgress,
       displayLean: localDisplayLean.get(entity) ?? state.currentLean,
       collapsing: state.collapsing,
+      completedTime: state.completedTime,
+      bricksRequired: cfg.bricksRequired,
     }
   }
-  return { riseProgress: 0, displayLean: 0, collapsing: false }
+  return null
 }

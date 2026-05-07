@@ -28,9 +28,15 @@ const BRICK_HOVER_HEIGHT = 1.2
 let worldStateEntity: Entity | null = null
 let timeSinceSpawn = 0
 let nextBrickId = 1
+const currentRoundContributors = new Set<string>()
 
-type PlayerProfile = { lifetimeContributions: number }
+type PlayerProfile = {
+  lifetimeContributions: number
+  completionsByBuilding: Record<string, number>
+  unlockedTier: number
+}
 const PROFILE_KEY = 'profile'
+const COMPLETION_CELEBRATION_S = 10
 const profilePromises = new Map<string, Promise<PlayerProfile>>()
 const greetedEntities = new Set<Entity>()
 
@@ -40,13 +46,17 @@ async function loadProfile(address: string): Promise<PlayerProfile> {
     if (raw) {
       const parsed = JSON.parse(raw)
       if (typeof parsed?.lifetimeContributions === 'number') {
-        return parsed as PlayerProfile
+        return {
+          lifetimeContributions: parsed.lifetimeContributions,
+          completionsByBuilding: parsed.completionsByBuilding ?? {},
+          unlockedTier: parsed.unlockedTier ?? 1,
+        }
       }
     }
   } catch (e) {
     console.log('[SERVER] loadProfile error', address, e)
   }
-  return { lifetimeContributions: 0 }
+  return { lifetimeContributions: 0, completionsByBuilding: {}, unlockedTier: 1 }
 }
 
 async function saveProfile(address: string, profile: PlayerProfile) {
@@ -86,7 +96,10 @@ export function initServer() {
   console.log('[SERVER] initServer')
 
   worldStateEntity = engine.addEntity()
-  WorldState.create(worldStateEntity, { brickCount: 0 })
+  WorldState.create(worldStateEntity, {
+    brickCount: 0,
+    currentBuildingKey: BUILDING_CONFIGS[0].entityName,
+  })
   syncEntity(worldStateEntity, [WorldState.componentId])
 
   for (const cfg of BUILDING_CONFIGS) {
@@ -120,8 +133,16 @@ function attachBuildingState(cfg: BuildingConfig) {
     collapseStartProgress: 0,
     baseGroundY: 0,
     baseInitialized: false,
+    completedTime: 0,
   })
   syncEntity(stateEntity, [BuildingState.componentId])
+}
+
+function findBuildingStateEntity(buildingKey: string): Entity | null {
+  for (const [entity, state] of engine.getEntitiesWith(BuildingState)) {
+    if (state.buildingKey === buildingKey) return entity
+  }
+  return null
 }
 
 function brickSpawnSystem(dt: number) {
@@ -235,6 +256,7 @@ function handleCollectBrick(brickId: number, playerAddress: string) {
 
 async function creditPlayer(rawAddress: string, amount: number) {
   const address = rawAddress.toLowerCase()
+  currentRoundContributors.add(address)
   const profile = await ensureProfile(address)
   profile.lifetimeContributions += amount
   void saveProfile(address, profile)
@@ -243,6 +265,100 @@ async function creditPlayer(rawAddress: string, amount: number) {
     { count: profile.lifetimeContributions },
     { to: [rawAddress] }
   )
+}
+
+function presentPlayerAddresses(): Set<string> {
+  const present = new Set<string>()
+  for (const [_, identity] of engine.getEntitiesWith(PlayerIdentityData)) {
+    present.add(identity.address.toLowerCase())
+  }
+  return present
+}
+
+async function handleBuildingCompletion(cfg: BuildingConfig) {
+  const present = presentPlayerAddresses()
+  const eligible = [...currentRoundContributors].filter((a) => present.has(a))
+
+  // Credit eligible players' profiles
+  for (const address of eligible) {
+    const profile = await ensureProfile(address)
+    profile.completionsByBuilding[cfg.entityName] =
+      (profile.completionsByBuilding[cfg.entityName] ?? 0) + 1
+    if (cfg.tier + 1 > profile.unlockedTier) {
+      profile.unlockedTier = cfg.tier + 1
+    }
+    void saveProfile(address, profile)
+  }
+
+  console.log(
+    '[SERVER] Building completed:',
+    cfg.entityName,
+    '— eligible contributors:',
+    eligible.length
+  )
+
+  const nextKey = await pickNextBuildingKey(cfg.entityName)
+  await transitionToBuilding(nextKey, cfg)
+}
+
+async function pickNextBuildingKey(currentKey: string): Promise<string> {
+  // Each in-scene player contributes 1 weight per building they have unlocked.
+  // Exclude the just-completed building.
+  const weights = new Map<string, number>()
+  for (const [_, identity] of engine.getEntitiesWith(PlayerIdentityData)) {
+    const profile = await ensureProfile(identity.address.toLowerCase())
+    for (const cfg of BUILDING_CONFIGS) {
+      if (cfg.tier > profile.unlockedTier) continue
+      if (cfg.entityName === currentKey) continue
+      weights.set(cfg.entityName, (weights.get(cfg.entityName) ?? 0) + 1)
+    }
+  }
+  if (weights.size === 0) return currentKey // only the current is unlocked → repeat
+  const total = [...weights.values()].reduce((a, b) => a + b, 0)
+  let r = Math.random() * total
+  for (const [key, w] of weights) {
+    r -= w
+    if (r <= 0) return key
+  }
+  return [...weights.keys()][0]
+}
+
+async function transitionToBuilding(nextKey: string, completedCfg: BuildingConfig) {
+  if (!worldStateEntity) return
+  const ws = WorldState.getMutable(worldStateEntity)
+
+  // Reset the just-completed building's state (it'll fall to "hidden" client-side
+  // since it's no longer the current building)
+  const completedEntity = findBuildingStateEntity(completedCfg.entityName)
+  if (completedEntity) {
+    const s = BuildingState.getMutable(completedEntity)
+    s.riseProgress = 0
+    s.currentLean = 0
+    s.collapsing = false
+    s.collapseTime = 0
+    s.collapseStartProgress = 0
+    s.completedTime = 0
+  }
+
+  // Reset the new building's state and lazy-init flag so it picks up its
+  // composite-loaded baseGroundY on next tick.
+  const nextEntity = findBuildingStateEntity(nextKey)
+  if (nextEntity) {
+    const s = BuildingState.getMutable(nextEntity)
+    s.riseProgress = 0
+    s.currentLean = 0
+    s.collapsing = false
+    s.collapseTime = 0
+    s.collapseStartProgress = 0
+    s.completedTime = 0
+    s.baseInitialized = false
+  }
+
+  ws.brickCount = 0
+  ws.currentBuildingKey = nextKey
+  currentRoundContributors.clear()
+
+  console.log('[SERVER] Transitioning to', nextKey)
 }
 
 function incrementBrickCount(amount: number) {
@@ -272,10 +388,13 @@ function configForStateEntity(stateEntity: Entity): BuildingConfig | null {
 function serverBuildingSystem(dt: number) {
   if (!worldStateEntity) return
   const ws = WorldState.getMutable(worldStateEntity)
+  const activeKey = ws.currentBuildingKey
 
   for (const [entity] of engine.getEntitiesWith(BuildingState)) {
     const cfg = configForStateEntity(entity)
     if (!cfg) continue
+    if (cfg.entityName !== activeKey) continue // only tick the active building
+
     const state = BuildingState.getMutable(entity)
 
     if (!state.baseInitialized) {
@@ -299,6 +418,7 @@ function serverBuildingSystem(dt: number) {
         state.riseProgress = 0
         state.collapsing = false
         state.collapseTime = 0
+        state.completedTime = 0
       }
       continue
     }
@@ -312,8 +432,18 @@ function serverBuildingSystem(dt: number) {
       const settleEasing = 1 - Math.exp(-dt * 0.8)
       state.currentLean +=
         (cfg.naturalLeanDeg - state.currentLean) * settleEasing
-    } else if (state.riseProgress > cfg.riseStartLeanProgress) {
-      state.currentLean += cfg.leanRatePerSec * dt
+      state.completedTime += dt
+      if (state.completedTime >= COMPLETION_CELEBRATION_S) {
+        // Fire-and-forget; transitionToBuilding mutates state inside
+        void handleBuildingCompletion(cfg)
+        // Prevent re-firing every frame while async work proceeds
+        state.completedTime = -999999
+      }
+    } else {
+      state.completedTime = 0
+      if (state.riseProgress > cfg.riseStartLeanProgress) {
+        state.currentLean += cfg.leanRatePerSec * dt
+      }
     }
 
     if (state.currentLean >= cfg.collapseAngleDeg) {
