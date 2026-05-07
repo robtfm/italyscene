@@ -4,6 +4,7 @@ import { AUTH_SERVER_PEER_ID } from '@dcl/sdk/network/message-bus-sync'
 export const WorldState = engine.defineComponent('italyscene:WorldState', {
   brickCount: Schemas.Int,
   currentBuildingKey: Schemas.String,
+  effectiveMultiBricksLevel: Schemas.Float,
 })
 
 export const BuildingState = engine.defineComponent('italyscene:BuildingState', {

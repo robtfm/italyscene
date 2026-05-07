@@ -15,6 +15,12 @@ import { Storage } from '@dcl/sdk/server'
 import { Brick, BuildingState, WorldState } from '../shared/schemas'
 import { room } from '../shared/messages'
 import { BUILDING_CONFIGS, BuildingConfig } from '../shared/buildings'
+import {
+  harmonicSum,
+  levelUpCost,
+  MAX_MULTI_BRICK_LEVEL,
+  rollBrickValue,
+} from '../shared/upgrades'
 
 const SCENE_SIZE = 80
 const FOUNTAIN = { x: 8, z: 8, clear: 11 }
@@ -34,6 +40,8 @@ type PlayerProfile = {
   lifetimeContributions: number
   completionsByBuilding: Record<string, number>
   unlockedTier: number
+  bricksSpent: number
+  multiBricksLevel: number
 }
 const PROFILE_KEY = 'profile'
 const WORLD_KEY = 'worldState'
@@ -59,6 +67,16 @@ type SerializedWorldState = {
 const profilePromises = new Map<string, Promise<PlayerProfile>>()
 const greetedEntities = new Set<Entity>()
 
+function defaultProfile(): PlayerProfile {
+  return {
+    lifetimeContributions: 0,
+    completionsByBuilding: {},
+    unlockedTier: 1,
+    bricksSpent: 0,
+    multiBricksLevel: 0,
+  }
+}
+
 async function loadProfile(address: string): Promise<PlayerProfile> {
   try {
     const raw = await Storage.player.get<string>(address, PROFILE_KEY)
@@ -69,13 +87,15 @@ async function loadProfile(address: string): Promise<PlayerProfile> {
           lifetimeContributions: parsed.lifetimeContributions,
           completionsByBuilding: parsed.completionsByBuilding ?? {},
           unlockedTier: parsed.unlockedTier ?? 1,
+          bricksSpent: parsed.bricksSpent ?? 0,
+          multiBricksLevel: parsed.multiBricksLevel ?? 0,
         }
       }
     }
   } catch (e) {
     console.log('[SERVER] loadProfile error', address, e)
   }
-  return { lifetimeContributions: 0, completionsByBuilding: {}, unlockedTier: 1 }
+  return defaultProfile()
 }
 
 async function saveProfile(address: string, profile: PlayerProfile) {
@@ -186,14 +206,22 @@ function worldSaveSystem(dt: number) {
   void saveWorldState()
 }
 
+function sendMyStats(rawAddress: string, profile: PlayerProfile) {
+  room.send(
+    'myStatsUpdate',
+    {
+      lifetimeContributions: profile.lifetimeContributions,
+      bricksSpent: profile.bricksSpent,
+      multiBricksLevel: profile.multiBricksLevel,
+    },
+    { to: [rawAddress] }
+  )
+}
+
 async function initPlayer(rawAddress: string) {
   const address = rawAddress.toLowerCase()
   const profile = await ensureProfile(address)
-  room.send(
-    'contributionUpdate',
-    { count: profile.lifetimeContributions },
-    { to: [rawAddress] }
-  )
+  sendMyStats(rawAddress, profile)
 }
 
 function playerJoinSystem() {
@@ -231,10 +259,16 @@ export async function initServer() {
     creditPlayer(context.from, 1)
   })
 
+  room.onMessage('levelUpMultiBricks', (_data, context) => {
+    if (!context) return
+    void handleLevelUpMultiBricks(context.from)
+  })
+
   engine.addSystem(brickSpawnSystem)
   engine.addSystem(serverBuildingSystem)
   engine.addSystem(playerJoinSystem)
   engine.addSystem(worldSaveSystem)
+  engine.addSystem(effectiveLevelSystem)
 }
 
 function attachBuildingState(cfg: BuildingConfig) {
@@ -327,26 +361,48 @@ function spawnBrick() {
     break
   }
   const groundY = hillHeightAt(x, z)
-  createBrickEntity(x, groundY + BRICK_HOVER_HEIGHT, z)
+  const eff = worldStateEntity
+    ? WorldState.get(worldStateEntity).effectiveMultiBricksLevel
+    : 0
+  const value = rollBrickValue(eff)
+  createBrickEntity(x, groundY + BRICK_HOVER_HEIGHT, z, value)
 }
 
-function createBrickEntity(x: number, y: number, z: number) {
+function createBrickEntity(x: number, y: number, z: number, value: number) {
   const entity = engine.addEntity()
   const brickId = nextBrickId++
-  Brick.create(entity, { brickId, value: 1, spawnedAt: Date.now() })
+  Brick.create(entity, { brickId, value, spawnedAt: Date.now() })
   Transform.create(entity, {
     position: { x, y, z },
-    scale: { x: 0.8, y: 0.5, z: 1.2 },
+    scale: { x: 0.8, y: 0.5 * value, z: 1.2 },
     rotation: { x: 0, y: Math.random() * Math.PI * 2, z: 0, w: 1 },
   })
   MeshRenderer.setBox(entity)
   MeshCollider.setBox(entity, ColliderLayer.CL_POINTER)
+  const palette =
+    value === 3
+      ? {
+          albedo: Color4.fromHexString('#e6b94dff'),
+          emissive: Color4.fromHexString('#b07a14ff'),
+          emissiveIntensity: 1.4,
+        }
+      : value === 2
+      ? {
+          albedo: Color4.fromHexString('#d96a30ff'),
+          emissive: Color4.fromHexString('#993315ff'),
+          emissiveIntensity: 1.0,
+        }
+      : {
+          albedo: Color4.fromHexString('#c2522dff'),
+          emissive: Color4.fromHexString('#7a2a14ff'),
+          emissiveIntensity: 0.6,
+        }
   Material.setPbrMaterial(entity, {
-    albedoColor: Color4.fromHexString('#c2522dff'),
+    albedoColor: palette.albedo,
     roughness: 0.85,
     metallic: 0.0,
-    emissiveColor: Color4.fromHexString('#7a2a14ff'),
-    emissiveIntensity: 0.6,
+    emissiveColor: palette.emissive,
+    emissiveIntensity: palette.emissiveIntensity,
   })
   syncEntity(entity, [
     Transform.componentId,
@@ -375,11 +431,56 @@ async function creditPlayer(rawAddress: string, amount: number) {
   const profile = await ensureProfile(address)
   profile.lifetimeContributions += amount
   void saveProfile(address, profile)
-  room.send(
-    'contributionUpdate',
-    { count: profile.lifetimeContributions },
-    { to: [rawAddress] }
+  sendMyStats(rawAddress, profile)
+}
+
+async function handleLevelUpMultiBricks(rawAddress: string) {
+  const address = rawAddress.toLowerCase()
+  const profile = await ensureProfile(address)
+  if (profile.multiBricksLevel >= MAX_MULTI_BRICK_LEVEL) return
+  const cost = levelUpCost(profile.multiBricksLevel)
+  const available = profile.lifetimeContributions - profile.bricksSpent
+  if (available < cost) return
+  profile.bricksSpent += cost
+  profile.multiBricksLevel += 1
+  void saveProfile(address, profile)
+  sendMyStats(rawAddress, profile)
+  console.log(
+    '[SERVER]',
+    address,
+    'leveled up Multi-bricks ->',
+    profile.multiBricksLevel
   )
+}
+
+let effectiveLevelTimer = 0
+let effectiveLevelInFlight = false
+
+function effectiveLevelSystem(dt: number) {
+  effectiveLevelTimer += dt
+  if (effectiveLevelTimer < 1) return
+  effectiveLevelTimer = 0
+  if (effectiveLevelInFlight) return
+  effectiveLevelInFlight = true
+  void recomputeEffectiveLevelAsync().finally(() => {
+    effectiveLevelInFlight = false
+  })
+}
+
+async function recomputeEffectiveLevelAsync() {
+  if (!worldStateEntity) return
+  const levels: number[] = []
+  for (const [_, identity] of engine.getEntitiesWith(PlayerIdentityData)) {
+    const address = identity.address.toLowerCase()
+    const profile = await ensureProfile(address)
+    levels.push(profile.multiBricksLevel)
+  }
+  const eff = harmonicSum(levels)
+  const ws = WorldState.getMutableOrNull(worldStateEntity)
+  if (!ws) return
+  if (Math.abs(ws.effectiveMultiBricksLevel - eff) > 0.001) {
+    ws.effectiveMultiBricksLevel = eff
+  }
 }
 
 function presentPlayerAddresses(): Set<string> {

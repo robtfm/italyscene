@@ -15,16 +15,34 @@ const BRICK_MAX_PLAYER_DISTANCE = 4
 
 const handledBricks = new Set<Entity>()
 const localDisplayLean = new Map<Entity, number>()
-let myContribution = 0
+
+export type MyStats = {
+  lifetimeContributions: number
+  bricksSpent: number
+  multiBricksLevel: number
+}
+let myStats: MyStats = {
+  lifetimeContributions: 0,
+  bricksSpent: 0,
+  multiBricksLevel: 0,
+}
 
 export function getMyContribution(): number {
-  return myContribution
+  return myStats.lifetimeContributions
+}
+
+export function getMyStats(): MyStats {
+  return myStats
 }
 
 export function initClient() {
   console.log('[CLIENT] initClient')
-  room.onMessage('contributionUpdate', (data) => {
-    myContribution = data.count
+  room.onMessage('myStatsUpdate', (data) => {
+    myStats = {
+      lifetimeContributions: data.lifetimeContributions,
+      bricksSpent: data.bricksSpent,
+      multiBricksLevel: data.multiBricksLevel,
+    }
   })
   engine.addSystem(brickHandlerSystem)
   engine.addSystem(buildingVisualSystem)
@@ -34,19 +52,27 @@ function brickHandlerSystem() {
   if (!isStateSyncronized()) return
   for (const [entity] of engine.getEntitiesWith(Brick)) {
     if (handledBricks.has(entity)) continue
+    const brick = Brick.getOrNull(entity)
+    if (!brick) continue
+    const hoverText =
+      brick.value === 3
+        ? 'Collect 3 bricks'
+        : brick.value === 2
+        ? 'Collect 2 bricks'
+        : 'Collect brick'
     pointerEventsSystem.onPointerDown(
       {
         entity,
         opts: {
           button: InputAction.IA_PRIMARY,
-          hoverText: 'Collect brick',
+          hoverText,
           maxPlayerDistance: BRICK_MAX_PLAYER_DISTANCE,
         },
       },
       () => {
-        const brick = Brick.getOrNull(entity)
-        if (!brick) return
-        room.send('collectBrick', { brickId: brick.brickId })
+        const b = Brick.getOrNull(entity)
+        if (!b) return
+        room.send('collectBrick', { brickId: b.brickId })
       }
     )
     handledBricks.add(entity)
@@ -159,6 +185,13 @@ function applyBuildingVisual(
 export function getBrickCount(): number {
   for (const [_, state] of engine.getEntitiesWith(WorldState)) {
     return state.brickCount
+  }
+  return 0
+}
+
+export function getEffectiveMultiBricksLevel(): number {
+  for (const [_, ws] of engine.getEntitiesWith(WorldState)) {
+    return ws.effectiveMultiBricksLevel
   }
   return 0
 }

@@ -10,8 +10,15 @@ import {
   getBrickCount,
   getActiveBuildingState,
   getMyContribution,
+  getMyStats,
+  getEffectiveMultiBricksLevel,
 } from './setup'
 import { room } from '../shared/messages'
+import {
+  levelUpCost,
+  multiBricksChances,
+  MAX_MULTI_BRICK_LEVEL,
+} from '../shared/upgrades'
 
 const greetings = ['Hi!', 'Good morning!', 'Lovely!', 'Goodness!', 'Good evening!']
 let fountainClicks = 0
@@ -45,11 +52,19 @@ const COMPLETION_CELEBRATION_S = 10
 
 const uiComponent = () => {
   const active = getActiveBuildingState()
+  const stats = getMyStats()
+  const eff = getEffectiveMultiBricksLevel()
+  const chances = multiBricksChances(eff)
+  const available = stats.lifetimeContributions - stats.bricksSpent
+  const nextCost = levelUpCost(stats.multiBricksLevel)
+  const canLevelUp =
+    stats.multiBricksLevel < MAX_MULTI_BRICK_LEVEL && available >= nextCost
+
   return (
     <UiEntity
       uiTransform={{
         width: 420,
-        height: 240,
+        height: 360,
         margin: '16px 0 8px 270px',
         padding: 6,
       }}
@@ -85,10 +100,41 @@ const uiComponent = () => {
           uiTransform={{ width: '100%', height: 26 }}
         />
         <Label
-          value={`Your bricks: ${getMyContribution()}`}
+          value={`Your bricks: ${getMyContribution()}  (avail ${available})`}
           fontSize={13}
           color={Color4.Black()}
           uiTransform={{ width: '100%', height: 20 }}
+        />
+        <Label
+          value={`Multi-bricks effective L${eff.toFixed(2)}: ${(chances.double * 100).toFixed(1)}% double, ${(chances.triple * 100).toFixed(1)}% triple`}
+          fontSize={11}
+          color={piazzaRed}
+          uiTransform={{ width: '100%', height: 18 }}
+        />
+        <Label
+          value={
+            stats.multiBricksLevel >= MAX_MULTI_BRICK_LEVEL
+              ? `Your multi-bricks: L${stats.multiBricksLevel} (max)`
+              : `Your multi-bricks: L${stats.multiBricksLevel}  next costs ${nextCost}`
+          }
+          fontSize={11}
+          color={Color4.Black()}
+          uiTransform={{ width: '100%', height: 18 }}
+        />
+        <Button
+          uiTransform={{ width: 200, height: 26, margin: 2 }}
+          value={
+            stats.multiBricksLevel >= MAX_MULTI_BRICK_LEVEL
+              ? 'Multi-bricks: MAX'
+              : canLevelUp
+              ? `Level up (${nextCost} bricks)`
+              : `Need ${nextCost} bricks`
+          }
+          variant={canLevelUp ? 'primary' : 'secondary'}
+          fontSize={11}
+          onMouseDown={() => {
+            if (canLevelUp) room.send('levelUpMultiBricks', { ts: Date.now() })
+          }}
         />
         <Label
           value={
