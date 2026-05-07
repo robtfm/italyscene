@@ -6,12 +6,12 @@ import ReactEcs, {
   ReactEcsRenderer,
   UiEntity,
 } from '@dcl/sdk/react-ecs'
-import { getBrickCount, getPisaState } from './setup'
+import { getBrickCount, getPisaState, getMyContribution } from './setup'
 import { room } from '../shared/messages'
 
-const greetings = ['Ciao!', 'Buongiorno!', 'Bella!', 'Mamma mia!', 'Buonasera!']
+const greetings = ['Hi!', 'Good morning!', 'Lovely!', 'Goodness!', 'Good evening!']
 let fountainClicks = 0
-let currentGreeting = 'Benvenuto in piazza'
+let currentGreeting = 'Welcome to the piazza'
 
 export function registerFountainClick() {
   fountainClicks += 1
@@ -26,7 +26,7 @@ export function setupUi() {
     pointerEventsSystem.onPointerDown(
       {
         entity: fountain,
-        opts: { button: InputAction.IA_PRIMARY, hoverText: 'Tocca la fontana' },
+        opts: { button: InputAction.IA_PRIMARY, hoverText: 'Touch the fountain' },
       },
       () => registerFountainClick()
     )
@@ -61,7 +61,7 @@ const uiComponent = () => {
         uiBackground={{ color: piazzaWhite }}
       >
         <Label
-          value="Piazza Italiana"
+          value="Italian Piazza"
           fontSize={22}
           color={piazzaRed}
           uiTransform={{ width: '100%', height: 32 }}
@@ -73,42 +73,48 @@ const uiComponent = () => {
           uiTransform={{ width: '100%', height: 28 }}
         />
         <Label
-          value={`Mattoni raccolti: ${getBrickCount()}`}
+          value={`Bricks collected: ${getBrickCount()}`}
           fontSize={16}
           color={piazzaRed}
           uiTransform={{ width: '100%', height: 26 }}
         />
         <Label
+          value={`Your bricks: ${getMyContribution()}`}
+          fontSize={13}
+          color={Color4.Black()}
+          uiTransform={{ width: '100%', height: 20 }}
+        />
+        <Label
           value={
             pisa.collapsing
-              ? 'Torre di Pisa: CROLLO!!!'
-              : `Torre di Pisa: ${Math.round(pisa.riseProgress * 100)}%`
+              ? 'Tower of Pisa: COLLAPSING!!!'
+              : `Tower of Pisa: ${Math.round(pisa.riseProgress * 100)}%`
           }
           fontSize={14}
           color={pisa.collapsing ? piazzaRed : Color4.Black()}
           uiTransform={{ width: '100%', height: 22 }}
         />
         <Label
-          value={`Pendenza: ${pisa.displayLean.toFixed(1)}°`}
+          value={`Lean: ${pisa.displayLean.toFixed(1)}°`}
           fontSize={12}
           color={pisa.displayLean > 25 ? piazzaRed : Color4.Black()}
           uiTransform={{ width: '100%', height: 18 }}
         />
         <Label
-          value={`Fontana toccata: ${fountainClicks}`}
+          value={`Fountain taps: ${fountainClicks}`}
           fontSize={12}
           color={Color4.Black()}
           uiTransform={{ width: '100%', height: 20 }}
         />
         <Label
-          value={`Posizione: ${getPlayerPosition()}`}
+          value={`Position: ${getPlayerPosition()}`}
           fontSize={11}
           color={Color4.Black()}
           uiTransform={{ width: '100%', height: 18 }}
         />
         <Button
           uiTransform={{ width: 160, height: 26, margin: 2 }}
-          value="DEBUG: +1 mattone"
+          value="DEBUG: +1 brick"
           variant="secondary"
           fontSize={10}
           onMouseDown={() => room.send('debugAddBrick', { ts: Date.now() })}
@@ -120,7 +126,7 @@ const uiComponent = () => {
 
 function getPlayerPosition() {
   const playerPosition = Transform.getOrNull(engine.PlayerEntity)
-  if (!playerPosition) return 'in arrivo...'
+  if (!playerPosition) return 'incoming...'
   const { x, y, z } = playerPosition.position
   return `{X: ${x.toFixed(1)}, Y: ${y.toFixed(1)}, Z: ${z.toFixed(1)}}`
 }

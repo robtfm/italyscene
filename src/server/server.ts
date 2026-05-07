@@ -26,6 +26,7 @@ const BRICK_HOVER_HEIGHT = 1.2
 let worldStateEntity: Entity | null = null
 let timeSinceSpawn = 0
 let nextBrickId = 1
+const contributions = new Map<string, number>()
 
 export function initServer() {
   console.log('[SERVER] initServer')
@@ -40,12 +41,13 @@ export function initServer() {
 
   room.onMessage('collectBrick', (data, context) => {
     if (!context) return
-    handleCollectBrick(data.brickId)
+    handleCollectBrick(data.brickId, context.from)
   })
 
   room.onMessage('debugAddBrick', (_data, context) => {
     if (!context) return
     incrementBrickCount(1)
+    creditPlayer(context.from, 1)
   })
 
   engine.addSystem(brickSpawnSystem)
@@ -164,15 +166,23 @@ function createBrickEntity(x: number, y: number, z: number) {
   ])
 }
 
-function handleCollectBrick(brickId: number) {
+function handleCollectBrick(brickId: number, playerAddress: string) {
   for (const [entity, b] of engine.getEntitiesWith(Brick)) {
     if (b.brickId !== brickId) continue
     const value = b.value || 1
     incrementBrickCount(value)
+    creditPlayer(playerAddress, value)
     engine.removeEntity(entity)
     return
   }
   console.log('[SERVER] collectBrick: no entity with brickId', brickId)
+}
+
+function creditPlayer(rawAddress: string, amount: number) {
+  const address = rawAddress.toLowerCase()
+  const next = (contributions.get(address) ?? 0) + amount
+  contributions.set(address, next)
+  room.send('contributionUpdate', { count: next }, { to: [rawAddress] })
 }
 
 function incrementBrickCount(amount: number) {

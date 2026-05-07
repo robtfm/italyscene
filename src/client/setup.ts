@@ -15,9 +15,17 @@ const BRICK_MAX_PLAYER_DISTANCE = 4
 
 const handledBricks = new Set<Entity>()
 const localDisplayLean = new Map<Entity, number>()
+let myContribution = 0
+
+export function getMyContribution(): number {
+  return myContribution
+}
 
 export function initClient() {
   console.log('[CLIENT] initClient')
+  room.onMessage('contributionUpdate', (data) => {
+    myContribution = data.count
+  })
   engine.addSystem(brickHandlerSystem)
   engine.addSystem(buildingVisualSystem)
 }
@@ -31,7 +39,7 @@ function brickHandlerSystem() {
         entity,
         opts: {
           button: InputAction.IA_PRIMARY,
-          hoverText: 'Raccogli mattone',
+          hoverText: 'Collect brick',
           maxPlayerDistance: BRICK_MAX_PLAYER_DISTANCE,
         },
       },
