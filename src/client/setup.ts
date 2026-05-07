@@ -47,7 +47,12 @@ export function initClient() {
       pickupRadiusLevel: data.pickupRadiusLevel,
     }
     if (data.pickupRadiusLevel !== prevRadiusLevel) {
-      // Re-register handlers on existing bricks so they pick up the new radius.
+      // Pull existing brick handlers and let brickHandlerSystem re-register
+      // with the new radius next tick. removeOnPointerDown clears the prior
+      // callback so the new one doesn't stack on top.
+      for (const entity of handledBricks) {
+        pointerEventsSystem.removeOnPointerDown(entity)
+      }
       handledBricks.clear()
     }
   })
