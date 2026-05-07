@@ -1,0 +1,117 @@
+import { engine, Transform } from '@dcl/sdk/ecs'
+import { Color4 } from '@dcl/sdk/math'
+import ReactEcs, {
+  Button,
+  Label,
+  ReactEcsRenderer,
+  UiEntity,
+} from '@dcl/sdk/react-ecs'
+import {
+  getBrickCount,
+  getPisaProgress,
+  getPisaLean,
+  isPisaCollapsing,
+  debugAddBrick,
+} from './game'
+
+const greetings = ['Ciao!', 'Buongiorno!', 'Bella!', 'Mamma mia!', 'Buonasera!']
+let fountainClicks = 0
+let currentGreeting = 'Benvenuto in piazza'
+
+export function registerFountainClick() {
+  fountainClicks += 1
+  currentGreeting = greetings[fountainClicks % greetings.length]
+}
+
+export function setupUi() {
+  ReactEcsRenderer.setUiRenderer(uiComponent)
+}
+
+const piazzaGreen = Color4.fromHexString('#0f8a4cff')
+const piazzaWhite = Color4.fromHexString('#f6f3ecff')
+const piazzaRed = Color4.fromHexString('#c8233bff')
+
+const uiComponent = () => (
+  <UiEntity
+    uiTransform={{
+      width: 420,
+      height: 240,
+      margin: '16px 0 8px 270px',
+      padding: 6,
+    }}
+    uiBackground={{ color: piazzaGreen }}
+  >
+    <UiEntity
+      uiTransform={{
+        width: '100%',
+        height: '100%',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: 6,
+      }}
+      uiBackground={{ color: piazzaWhite }}
+    >
+      <Label
+        value="Piazza Italiana"
+        fontSize={22}
+        color={piazzaRed}
+        uiTransform={{ width: '100%', height: 32 }}
+      />
+      <Label
+        value={currentGreeting}
+        fontSize={18}
+        color={Color4.Black()}
+        uiTransform={{ width: '100%', height: 28 }}
+      />
+      <Label
+        value={`Mattoni raccolti: ${getBrickCount()}`}
+        fontSize={16}
+        color={piazzaRed}
+        uiTransform={{ width: '100%', height: 26 }}
+      />
+      <Label
+        value={
+          isPisaCollapsing()
+            ? 'Torre di Pisa: CROLLO!!!'
+            : `Torre di Pisa: ${Math.round(getPisaProgress() * 100)}%`
+        }
+        fontSize={14}
+        color={isPisaCollapsing() ? piazzaRed : Color4.Black()}
+        uiTransform={{ width: '100%', height: 22 }}
+      />
+      <Label
+        value={`Pendenza: ${getPisaLean().toFixed(1)}°`}
+        fontSize={12}
+        color={getPisaLean() > 25 ? piazzaRed : Color4.Black()}
+        uiTransform={{ width: '100%', height: 18 }}
+      />
+      <Label
+        value={`Fontana toccata: ${fountainClicks}`}
+        fontSize={12}
+        color={Color4.Black()}
+        uiTransform={{ width: '100%', height: 20 }}
+      />
+      <Label
+        value={`Posizione: ${getPlayerPosition()}`}
+        fontSize={11}
+        color={Color4.Black()}
+        uiTransform={{ width: '100%', height: 18 }}
+      />
+      <Button
+        uiTransform={{ width: 160, height: 26, margin: 2 }}
+        value="DEBUG: +1 mattone"
+        variant="secondary"
+        fontSize={10}
+        onMouseDown={() => debugAddBrick()}
+      />
+    </UiEntity>
+  </UiEntity>
+)
+
+function getPlayerPosition() {
+  const playerPosition = Transform.getOrNull(engine.PlayerEntity)
+  if (!playerPosition) return 'in arrivo...'
+  const { x, y, z } = playerPosition.position
+  return `{X: ${x.toFixed(1)}, Y: ${y.toFixed(1)}, Z: ${z.toFixed(1)}}`
+}
