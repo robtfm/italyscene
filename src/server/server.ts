@@ -42,6 +42,7 @@ type PlayerProfile = {
   unlockedTier: number
   bricksSpent: number
   multiBricksLevel: number
+  pickupRadiusLevel: number
 }
 const PROFILE_KEY = 'profile'
 const WORLD_KEY = 'worldState'
@@ -74,6 +75,7 @@ function defaultProfile(): PlayerProfile {
     unlockedTier: 1,
     bricksSpent: 0,
     multiBricksLevel: 0,
+    pickupRadiusLevel: 0,
   }
 }
 
@@ -89,6 +91,7 @@ async function loadProfile(address: string): Promise<PlayerProfile> {
           unlockedTier: parsed.unlockedTier ?? 1,
           bricksSpent: parsed.bricksSpent ?? 0,
           multiBricksLevel: parsed.multiBricksLevel ?? 0,
+          pickupRadiusLevel: parsed.pickupRadiusLevel ?? 0,
         }
       }
     }
@@ -213,6 +216,7 @@ function sendMyStats(rawAddress: string, profile: PlayerProfile) {
       lifetimeContributions: profile.lifetimeContributions,
       bricksSpent: profile.bricksSpent,
       multiBricksLevel: profile.multiBricksLevel,
+      pickupRadiusLevel: profile.pickupRadiusLevel,
     },
     { to: [rawAddress] }
   )
@@ -262,6 +266,11 @@ export async function initServer() {
   room.onMessage('levelUpMultiBricks', (_data, context) => {
     if (!context) return
     void handleLevelUpMultiBricks(context.from)
+  })
+
+  room.onMessage('levelUpPickupRadius', (_data, context) => {
+    if (!context) return
+    void handleLevelUpPickupRadius(context.from)
   })
 
   engine.addSystem(brickSpawnSystem)
@@ -450,6 +459,25 @@ async function handleLevelUpMultiBricks(rawAddress: string) {
     address,
     'leveled up Multi-bricks ->',
     profile.multiBricksLevel
+  )
+}
+
+async function handleLevelUpPickupRadius(rawAddress: string) {
+  const address = rawAddress.toLowerCase()
+  const profile = await ensureProfile(address)
+  if (profile.pickupRadiusLevel >= MAX_MULTI_BRICK_LEVEL) return
+  const cost = levelUpCost(profile.pickupRadiusLevel)
+  const available = profile.lifetimeContributions - profile.bricksSpent
+  if (available < cost) return
+  profile.bricksSpent += cost
+  profile.pickupRadiusLevel += 1
+  void saveProfile(address, profile)
+  sendMyStats(rawAddress, profile)
+  console.log(
+    '[SERVER]',
+    address,
+    'leveled up Pickup Radius ->',
+    profile.pickupRadiusLevel
   )
 }
 

@@ -9,8 +9,10 @@ export const Messages = {
     lifetimeContributions: Schemas.Int,
     bricksSpent: Schemas.Int,
     multiBricksLevel: Schemas.Int,
+    pickupRadiusLevel: Schemas.Int,
   }),
   levelUpMultiBricks: Schemas.Map({ ts: Schemas.Int }),
+  levelUpPickupRadius: Schemas.Map({ ts: Schemas.Int }),
 }
 
 export const room = registerMessages(Messages)

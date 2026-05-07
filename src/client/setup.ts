@@ -10,8 +10,7 @@ import { isStateSyncronized } from '@dcl/sdk/network'
 import { Brick, BuildingState, WorldState } from '../shared/schemas'
 import { room } from '../shared/messages'
 import { BUILDING_CONFIGS, BuildingConfig } from '../shared/buildings'
-
-const BRICK_MAX_PLAYER_DISTANCE = 4
+import { pickupRadius } from '../shared/upgrades'
 
 const handledBricks = new Set<Entity>()
 const localDisplayLean = new Map<Entity, number>()
@@ -20,11 +19,13 @@ export type MyStats = {
   lifetimeContributions: number
   bricksSpent: number
   multiBricksLevel: number
+  pickupRadiusLevel: number
 }
 let myStats: MyStats = {
   lifetimeContributions: 0,
   bricksSpent: 0,
   multiBricksLevel: 0,
+  pickupRadiusLevel: 0,
 }
 
 export function getMyContribution(): number {
@@ -38,10 +39,16 @@ export function getMyStats(): MyStats {
 export function initClient() {
   console.log('[CLIENT] initClient')
   room.onMessage('myStatsUpdate', (data) => {
+    const prevRadiusLevel = myStats.pickupRadiusLevel
     myStats = {
       lifetimeContributions: data.lifetimeContributions,
       bricksSpent: data.bricksSpent,
       multiBricksLevel: data.multiBricksLevel,
+      pickupRadiusLevel: data.pickupRadiusLevel,
+    }
+    if (data.pickupRadiusLevel !== prevRadiusLevel) {
+      // Re-register handlers on existing bricks so they pick up the new radius.
+      handledBricks.clear()
     }
   })
   engine.addSystem(brickHandlerSystem)
@@ -50,6 +57,7 @@ export function initClient() {
 
 function brickHandlerSystem() {
   if (!isStateSyncronized()) return
+  const radius = pickupRadius(myStats.pickupRadiusLevel)
   for (const [entity] of engine.getEntitiesWith(Brick)) {
     if (handledBricks.has(entity)) continue
     const brick = Brick.getOrNull(entity)
@@ -66,7 +74,7 @@ function brickHandlerSystem() {
         opts: {
           button: InputAction.IA_PRIMARY,
           hoverText,
-          maxPlayerDistance: BRICK_MAX_PLAYER_DISTANCE,
+          maxPlayerDistance: radius,
         },
       },
       () => {

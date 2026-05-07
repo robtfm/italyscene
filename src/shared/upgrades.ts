@@ -1,27 +1,33 @@
 // Tunables — feel can be adjusted without rewiring.
 
-export const MAX_MULTI_BRICK_LEVEL = 10
-
-// At max effective level (+harmonic stacking), these are the asymptotic chances.
-export const MAX_DOUBLE_CHANCE = 0.25
-export const MAX_TRIPLE_CHANCE = 0.04
-
-// reward(L) = max_effect * ln(L+1) / ln(max+1)
-// Cap the multiplier at 1.5 to prevent crazy stacking from many high-tier players.
+export const MAX_LEVEL = 10
 const REWARD_CAP = 1.5
 
-export function multiBricksRewardFraction(effectiveLevel: number): number {
-  if (effectiveLevel <= 0) return 0
-  const f = Math.log(effectiveLevel + 1) / Math.log(MAX_MULTI_BRICK_LEVEL + 1)
+// Generic level→fraction-of-max-effect curve. Saturates at L10, capped at 1.5×.
+export function levelToFraction(level: number): number {
+  if (level <= 0) return 0
+  const f = Math.log(level + 1) / Math.log(MAX_LEVEL + 1)
   return Math.min(REWARD_CAP, f)
 }
+
+// Multi-bricks (world-wide).
+export const MAX_DOUBLE_CHANCE = 0.25
+export const MAX_TRIPLE_CHANCE = 0.04
 
 export function multiBricksChances(effectiveLevel: number): {
   double: number
   triple: number
 } {
-  const f = multiBricksRewardFraction(effectiveLevel)
+  const f = levelToFraction(effectiveLevel)
   return { double: MAX_DOUBLE_CHANCE * f, triple: MAX_TRIPLE_CHANCE * f }
+}
+
+// Pickup radius (personal). Base 4m → up to 4 + 4 = 8m at L10.
+export const PICKUP_RADIUS_BASE = 4
+export const PICKUP_RADIUS_BONUS_MAX = 4
+
+export function pickupRadius(personalLevel: number): number {
+  return PICKUP_RADIUS_BASE + PICKUP_RADIUS_BONUS_MAX * levelToFraction(personalLevel)
 }
 
 export function harmonicSum(levels: number[]): number {
@@ -35,9 +41,12 @@ export function harmonicSum(levels: number[]): number {
 
 // Cost of advancing FROM level (level) TO level (level+1). Exponential.
 export function levelUpCost(currentLevel: number): number {
-  if (currentLevel >= MAX_MULTI_BRICK_LEVEL) return Infinity
+  if (currentLevel >= MAX_LEVEL) return Infinity
   return Math.round(5 * Math.pow(1.5, currentLevel))
 }
+
+// Backwards-compat alias used by older callers.
+export const MAX_MULTI_BRICK_LEVEL = MAX_LEVEL
 
 export function rollBrickValue(effectiveLevel: number, rng: () => number = Math.random): number {
   const { double, triple } = multiBricksChances(effectiveLevel)
