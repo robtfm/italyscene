@@ -16,10 +16,19 @@ import { Brick, BuildingState, WorldState } from '../shared/schemas'
 import { room } from '../shared/messages'
 import { BUILDING_CONFIGS, BuildingConfig } from '../shared/buildings'
 import {
+  brickCapMultiplier,
+  contributionPersonalBonus,
+  contributionTeacherBonus,
   harmonicSum,
+  leanRateScale,
   levelUpCost,
   MAX_MULTI_BRICK_LEVEL,
+  plumbLinePersonalBonus,
+  plumbLineTeacherBonus,
   rollBrickValue,
+  spawnIntervalScale,
+  sturdyAngleBonus,
+  titheBonus,
 } from '../shared/upgrades'
 
 const SCENE_SIZE = 80
@@ -42,6 +51,15 @@ type PlayerProfile = {
   bricksSpent: number
   multiBricksLevel: number
   pickupRadiusLevel: number
+  fasterSpawnsLevel: number
+  leanDampenerLevel: number
+  sturdyFoundationLevel: number
+  plumbLineLevel: number
+  plumbTeacherLevel: number
+  generousLevel: number
+  generousTeacherLevel: number
+  stockpileLevel: number
+  titheLevel: number
 }
 const PROFILE_KEY = 'profile'
 const WORLD_KEY = 'worldState'
@@ -75,6 +93,15 @@ function defaultProfile(): PlayerProfile {
     bricksSpent: 0,
     multiBricksLevel: 0,
     pickupRadiusLevel: 0,
+    fasterSpawnsLevel: 0,
+    leanDampenerLevel: 0,
+    sturdyFoundationLevel: 0,
+    plumbLineLevel: 0,
+    plumbTeacherLevel: 0,
+    generousLevel: 0,
+    generousTeacherLevel: 0,
+    stockpileLevel: 0,
+    titheLevel: 0,
   }
 }
 
@@ -91,6 +118,15 @@ async function loadProfile(address: string): Promise<PlayerProfile> {
           bricksSpent: parsed.bricksSpent ?? 0,
           multiBricksLevel: parsed.multiBricksLevel ?? 0,
           pickupRadiusLevel: parsed.pickupRadiusLevel ?? 0,
+          fasterSpawnsLevel: parsed.fasterSpawnsLevel ?? 0,
+          leanDampenerLevel: parsed.leanDampenerLevel ?? 0,
+          sturdyFoundationLevel: parsed.sturdyFoundationLevel ?? 0,
+          plumbLineLevel: parsed.plumbLineLevel ?? 0,
+          plumbTeacherLevel: parsed.plumbTeacherLevel ?? 0,
+          generousLevel: parsed.generousLevel ?? 0,
+          generousTeacherLevel: parsed.generousTeacherLevel ?? 0,
+          stockpileLevel: parsed.stockpileLevel ?? 0,
+          titheLevel: parsed.titheLevel ?? 0,
         }
       }
     }
@@ -216,6 +252,15 @@ function sendMyStats(rawAddress: string, profile: PlayerProfile) {
       bricksSpent: profile.bricksSpent,
       multiBricksLevel: profile.multiBricksLevel,
       pickupRadiusLevel: profile.pickupRadiusLevel,
+      fasterSpawnsLevel: profile.fasterSpawnsLevel,
+      leanDampenerLevel: profile.leanDampenerLevel,
+      sturdyFoundationLevel: profile.sturdyFoundationLevel,
+      plumbLineLevel: profile.plumbLineLevel,
+      plumbTeacherLevel: profile.plumbTeacherLevel,
+      generousLevel: profile.generousLevel,
+      generousTeacherLevel: profile.generousTeacherLevel,
+      stockpileLevel: profile.stockpileLevel,
+      titheLevel: profile.titheLevel,
     },
     { to: [rawAddress] }
   )
@@ -253,23 +298,46 @@ export async function initServer() {
 
   room.onMessage('collectBrick', (data, context) => {
     if (!context) return
-    handleCollectBrick(data.brickId, context.from)
+    void handleCollectBrick(data.brickId, context.from)
   })
 
   room.onMessage('debugAddBrick', (_data, context) => {
     if (!context) return
-    incrementBrickCount(1)
-    creditPlayer(context.from, 1)
+    void applyBrickAward(context.from, 1)
   })
 
   room.onMessage('levelUpMultiBricks', (_data, context) => {
-    if (!context) return
-    void handleLevelUpMultiBricks(context.from)
+    if (context) void handleLevelUp(context.from, 'multiBricksLevel')
   })
-
   room.onMessage('levelUpPickupRadius', (_data, context) => {
-    if (!context) return
-    void handleLevelUpPickupRadius(context.from)
+    if (context) void handleLevelUp(context.from, 'pickupRadiusLevel')
+  })
+  room.onMessage('levelUpFasterSpawns', (_data, context) => {
+    if (context) void handleLevelUp(context.from, 'fasterSpawnsLevel')
+  })
+  room.onMessage('levelUpLeanDampener', (_data, context) => {
+    if (context) void handleLevelUp(context.from, 'leanDampenerLevel')
+  })
+  room.onMessage('levelUpSturdyFoundation', (_data, context) => {
+    if (context) void handleLevelUp(context.from, 'sturdyFoundationLevel')
+  })
+  room.onMessage('levelUpPlumbLine', (_data, context) => {
+    if (context) void handleLevelUp(context.from, 'plumbLineLevel')
+  })
+  room.onMessage('levelUpPlumbTeacher', (_data, context) => {
+    if (context) void handleLevelUp(context.from, 'plumbTeacherLevel')
+  })
+  room.onMessage('levelUpGenerous', (_data, context) => {
+    if (context) void handleLevelUp(context.from, 'generousLevel')
+  })
+  room.onMessage('levelUpGenerousTeacher', (_data, context) => {
+    if (context) void handleLevelUp(context.from, 'generousTeacherLevel')
+  })
+  room.onMessage('levelUpStockpile', (_data, context) => {
+    if (context) void handleLevelUp(context.from, 'stockpileLevel')
+  })
+  room.onMessage('levelUpTithe', (_data, context) => {
+    if (context) void handleLevelUp(context.from, 'titheLevel')
   })
 
   engine.addSystem(brickSpawnSystem)
@@ -305,24 +373,28 @@ function findBuildingStateEntity(buildingKey: string): Entity | null {
 const MAX_SPAWNS_PER_TICK = 50
 
 function brickSpawnSystem(dt: number) {
+  // Effective interval is shorter when the world has Faster Spawns levels.
+  // Effective cap is larger when the world has Stockpile levels.
+  const ws = worldStateEntity ? WorldState.get(worldStateEntity) : null
+  const interval =
+    BRICK_SPAWN_INTERVAL_S *
+    (ws ? spawnIntervalScale(ws.effectiveFasterSpawnsLevel) : 1)
+  const cap = ws
+    ? Math.round(MAX_ACTIVE_BRICKS * brickCapMultiplier(ws.effectiveStockpileLevel))
+    : MAX_ACTIVE_BRICKS
   // Edge case: zero or negative interval -> one per tick (prevents infinite loop)
-  if (BRICK_SPAWN_INTERVAL_S <= 0) {
-    if (countActiveBricks() < MAX_ACTIVE_BRICKS) spawnBrick()
+  if (interval <= 0) {
+    if (countActiveBricks() < cap) spawnBrick()
     return
   }
   timeSinceSpawn += dt
   let spawned = 0
-  while (
-    timeSinceSpawn >= BRICK_SPAWN_INTERVAL_S &&
-    spawned < MAX_SPAWNS_PER_TICK
-  ) {
-    if (countActiveBricks() >= MAX_ACTIVE_BRICKS) {
-      // Cap accumulated time at one interval so a long downtime doesn't
-      // burst-spawn a flood once a brick is collected.
-      timeSinceSpawn = BRICK_SPAWN_INTERVAL_S
+  while (timeSinceSpawn >= interval && spawned < MAX_SPAWNS_PER_TICK) {
+    if (countActiveBricks() >= cap) {
+      timeSinceSpawn = interval
       return
     }
-    timeSinceSpawn -= BRICK_SPAWN_INTERVAL_S
+    timeSinceSpawn -= interval
     spawnBrick()
     spawned++
   }
@@ -435,16 +507,43 @@ function createBrickEntity(x: number, y: number, z: number, value: number) {
   ])
 }
 
-function handleCollectBrick(brickId: number, playerAddress: string) {
+async function handleCollectBrick(brickId: number, playerAddress: string) {
   for (const [entity, b] of engine.getEntitiesWith(Brick)) {
     if (b.brickId !== brickId) continue
     const value = b.value || 1
-    incrementBrickCount(value)
-    creditPlayer(playerAddress, value)
+    await applyBrickAward(playerAddress, value)
     engine.removeEntity(entity)
     return
   }
   console.log('[SERVER] collectBrick: no entity with brickId', brickId)
+}
+
+async function applyBrickAward(playerAddress: string, baseValue: number) {
+  const address = playerAddress.toLowerCase()
+  const profile = await ensureProfile(address)
+  const ws = worldStateEntity ? WorldState.get(worldStateEntity) : null
+  const personalContrib = contributionPersonalBonus(profile.generousLevel)
+  const teacherContrib = ws
+    ? contributionTeacherBonus(ws.effectiveGenerousTeacherLevel)
+    : 0
+  const valueMult = 1 + personalContrib + teacherContrib
+  // Generous boosts ONLY the building progress (brickCount), not the player's
+  // lifetime currency. Otherwise it snowballs into self-funding upgrades.
+  const buildingValue = Math.max(baseValue, Math.round(baseValue * valueMult))
+
+  const personalStraighten = plumbLinePersonalBonus(profile.plumbLineLevel)
+  const teacherStraighten = ws
+    ? plumbLineTeacherBonus(ws.effectivePlumbTeacherLevel)
+    : 0
+  const straightenBonus = personalStraighten + teacherStraighten
+
+  // Tithe (personal) multiplies only the upgrade-currency credit, not the
+  // building progress.
+  const tithe = titheBonus(profile.titheLevel)
+  const creditValue = Math.max(baseValue, Math.round(baseValue * (1 + tithe)))
+
+  incrementBrickCount(buildingValue, straightenBonus)
+  creditPlayer(playerAddress, creditValue)
 }
 
 async function creditPlayer(rawAddress: string, amount: number) {
@@ -456,42 +555,32 @@ async function creditPlayer(rawAddress: string, amount: number) {
   sendMyStats(rawAddress, profile)
 }
 
-async function handleLevelUpMultiBricks(rawAddress: string) {
-  const address = rawAddress.toLowerCase()
-  const profile = await ensureProfile(address)
-  if (profile.multiBricksLevel >= MAX_MULTI_BRICK_LEVEL) return
-  const cost = levelUpCost(profile.multiBricksLevel)
-  const available = profile.lifetimeContributions - profile.bricksSpent
-  if (available < cost) return
-  profile.bricksSpent += cost
-  profile.multiBricksLevel += 1
-  void saveProfile(address, profile)
-  sendMyStats(rawAddress, profile)
-  console.log(
-    '[SERVER]',
-    address,
-    'leveled up Multi-bricks ->',
-    profile.multiBricksLevel
-  )
-}
+type UpgradeKey =
+  | 'multiBricksLevel'
+  | 'pickupRadiusLevel'
+  | 'fasterSpawnsLevel'
+  | 'leanDampenerLevel'
+  | 'sturdyFoundationLevel'
+  | 'plumbLineLevel'
+  | 'plumbTeacherLevel'
+  | 'generousLevel'
+  | 'generousTeacherLevel'
+  | 'stockpileLevel'
+  | 'titheLevel'
 
-async function handleLevelUpPickupRadius(rawAddress: string) {
+async function handleLevelUp(rawAddress: string, key: UpgradeKey) {
   const address = rawAddress.toLowerCase()
   const profile = await ensureProfile(address)
-  if (profile.pickupRadiusLevel >= MAX_MULTI_BRICK_LEVEL) return
-  const cost = levelUpCost(profile.pickupRadiusLevel)
+  const current = profile[key]
+  if (current >= MAX_MULTI_BRICK_LEVEL) return
+  const cost = levelUpCost(current)
   const available = profile.lifetimeContributions - profile.bricksSpent
   if (available < cost) return
   profile.bricksSpent += cost
-  profile.pickupRadiusLevel += 1
+  profile[key] = current + 1
   void saveProfile(address, profile)
   sendMyStats(rawAddress, profile)
-  console.log(
-    '[SERVER]',
-    address,
-    'leveled up Pickup Radius ->',
-    profile.pickupRadiusLevel
-  )
+  console.log('[SERVER]', address, 'leveled up', key, '->', profile[key])
 }
 
 let effectiveLevelTimer = 0
@@ -510,18 +599,50 @@ function effectiveLevelSystem(dt: number) {
 
 async function recomputeEffectiveLevelAsync() {
   if (!worldStateEntity) return
-  const levels: number[] = []
+  const mb: number[] = []
+  const fs: number[] = []
+  const ld: number[] = []
+  const sf: number[] = []
+  const pt: number[] = []
+  const gt: number[] = []
+  const sp: number[] = []
   for (const [_, identity] of engine.getEntitiesWith(PlayerIdentityData)) {
     const address = identity.address.toLowerCase()
     const profile = await ensureProfile(address)
-    levels.push(profile.multiBricksLevel)
+    mb.push(profile.multiBricksLevel)
+    fs.push(profile.fasterSpawnsLevel)
+    ld.push(profile.leanDampenerLevel)
+    sf.push(profile.sturdyFoundationLevel)
+    pt.push(profile.plumbTeacherLevel)
+    gt.push(profile.generousTeacherLevel)
+    sp.push(profile.stockpileLevel)
   }
-  const eff = harmonicSum(levels)
   const ws = WorldState.getMutableOrNull(worldStateEntity)
   if (!ws) return
-  if (Math.abs(ws.effectiveMultiBricksLevel - eff) > 0.001) {
-    ws.effectiveMultiBricksLevel = eff
+  const setIfChanged = (cur: number, next: number, apply: (v: number) => void) => {
+    if (Math.abs(cur - next) > 0.001) apply(next)
   }
+  setIfChanged(ws.effectiveMultiBricksLevel, harmonicSum(mb), (v) => {
+    ws.effectiveMultiBricksLevel = v
+  })
+  setIfChanged(ws.effectiveFasterSpawnsLevel, harmonicSum(fs), (v) => {
+    ws.effectiveFasterSpawnsLevel = v
+  })
+  setIfChanged(ws.effectiveLeanDampenerLevel, harmonicSum(ld), (v) => {
+    ws.effectiveLeanDampenerLevel = v
+  })
+  setIfChanged(ws.effectiveSturdyFoundationLevel, harmonicSum(sf), (v) => {
+    ws.effectiveSturdyFoundationLevel = v
+  })
+  setIfChanged(ws.effectivePlumbTeacherLevel, harmonicSum(pt), (v) => {
+    ws.effectivePlumbTeacherLevel = v
+  })
+  setIfChanged(ws.effectiveGenerousTeacherLevel, harmonicSum(gt), (v) => {
+    ws.effectiveGenerousTeacherLevel = v
+  })
+  setIfChanged(ws.effectiveStockpileLevel, harmonicSum(sp), (v) => {
+    ws.effectiveStockpileLevel = v
+  })
 }
 
 function presentPlayerAddresses(): Set<string> {
@@ -618,7 +739,7 @@ async function transitionToBuilding(nextKey: string, completedCfg: BuildingConfi
   console.log('[SERVER] Transitioning to', nextKey)
 }
 
-function incrementBrickCount(amount: number) {
+function incrementBrickCount(amount: number, straightenBonus = 0) {
   if (!worldStateEntity) return
   const ws = WorldState.getMutable(worldStateEntity)
   ws.brickCount += amount
@@ -629,7 +750,8 @@ function incrementBrickCount(amount: number) {
     const state = BuildingState.getMutable(entity)
     if (state.collapsing) continue
     if (ws.brickCount >= cfg.bricksRequired) continue
-    state.currentLean = Math.max(0, state.currentLean - cfg.brickStraightenDeg)
+    const totalStraighten = cfg.brickStraightenDeg + straightenBonus
+    state.currentLean = Math.max(0, state.currentLean - totalStraighten)
   }
 }
 
@@ -699,11 +821,16 @@ function serverBuildingSystem(dt: number) {
     } else {
       state.completedTime = 0
       if (state.riseProgress > cfg.riseStartLeanProgress) {
-        state.currentLean += cfg.leanRatePerSec * dt
+        state.currentLean +=
+          cfg.leanRatePerSec *
+          leanRateScale(ws.effectiveLeanDampenerLevel) *
+          dt
       }
     }
 
-    if (state.currentLean >= cfg.collapseAngleDeg) {
+    const collapseThreshold =
+      cfg.collapseAngleDeg + sturdyAngleBonus(ws.effectiveSturdyFoundationLevel)
+    if (state.currentLean >= collapseThreshold) {
       state.collapsing = true
       state.collapseTime = 0
       state.collapseStartProgress = state.riseProgress

@@ -12,13 +12,28 @@ import {
   getMyContribution,
   getMyStats,
   getEffectiveMultiBricksLevel,
+  getEffectiveFasterSpawnsLevel,
+  getEffectiveLeanDampenerLevel,
+  getEffectiveSturdyFoundationLevel,
+  getEffectivePlumbTeacherLevel,
+  getEffectiveGenerousTeacherLevel,
+  getEffectiveStockpileLevel,
 } from './setup'
 import { room } from '../shared/messages'
 import {
+  brickCapMultiplier,
+  contributionPersonalBonus,
+  contributionTeacherBonus,
+  leanRateScale,
   levelUpCost,
   multiBricksChances,
   MAX_MULTI_BRICK_LEVEL,
   pickupRadius,
+  plumbLinePersonalBonus,
+  plumbLineTeacherBonus,
+  spawnIntervalScale,
+  sturdyAngleBonus,
+  titheBonus,
 } from '../shared/upgrades'
 
 const COMPLETION_CELEBRATION_S = 10
@@ -38,19 +53,28 @@ function buyableKey(name: string, level: number) {
   return `${name}:${level}`
 }
 
+const ALL_UPGRADES: { name: string; getter: (s: ReturnType<typeof getMyStats>) => number }[] = [
+  { name: 'multiBricks', getter: (s) => s.multiBricksLevel },
+  { name: 'pickupRadius', getter: (s) => s.pickupRadiusLevel },
+  { name: 'fasterSpawns', getter: (s) => s.fasterSpawnsLevel },
+  { name: 'leanDampener', getter: (s) => s.leanDampenerLevel },
+  { name: 'sturdyFoundation', getter: (s) => s.sturdyFoundationLevel },
+  { name: 'plumbLine', getter: (s) => s.plumbLineLevel },
+  { name: 'plumbTeacher', getter: (s) => s.plumbTeacherLevel },
+  { name: 'generous', getter: (s) => s.generousLevel },
+  { name: 'generousTeacher', getter: (s) => s.generousTeacherLevel },
+  { name: 'stockpile', getter: (s) => s.stockpileLevel },
+  { name: 'tithe', getter: (s) => s.titheLevel },
+]
+
 function currentlyBuyable(): Set<string> {
   const stats = getMyStats()
   const available = stats.lifetimeContributions - stats.bricksSpent
   const out = new Set<string>()
-  if (stats.multiBricksLevel < MAX_MULTI_BRICK_LEVEL) {
-    const cost = levelUpCost(stats.multiBricksLevel)
-    if (available >= cost)
-      out.add(buyableKey('multiBricks', stats.multiBricksLevel + 1))
-  }
-  if (stats.pickupRadiusLevel < MAX_MULTI_BRICK_LEVEL) {
-    const cost = levelUpCost(stats.pickupRadiusLevel)
-    if (available >= cost)
-      out.add(buyableKey('pickupRadius', stats.pickupRadiusLevel + 1))
+  for (const u of ALL_UPGRADES) {
+    const lvl = u.getter(stats)
+    if (lvl >= MAX_MULTI_BRICK_LEVEL) continue
+    if (available >= levelUpCost(lvl)) out.add(buyableKey(u.name, lvl + 1))
   }
   return out
 }
@@ -261,8 +285,11 @@ function topCenter() {
 
 function rightEdge() {
   const stats = getMyStats()
-  const eff = getEffectiveMultiBricksLevel()
-  const chances = multiBricksChances(eff)
+  const mb = getEffectiveMultiBricksLevel()
+  const fs = getEffectiveFasterSpawnsLevel()
+  const ld = getEffectiveLeanDampenerLevel()
+  const sf = getEffectiveSturdyFoundationLevel()
+  const chances = multiBricksChances(mb)
   return (
     <UiEntity
       uiTransform={{
@@ -276,9 +303,9 @@ function rightEdge() {
         index: 0,
         title: 'Multi-bricks',
         tooltip:
-          'Bricks may spawn in stacks. World-wide effect — combines harmonically across active players. Your level adds to the pool.',
+          'Bricks may spawn in stacks. World-wide — combines harmonically across active players.',
         lines: [
-          `Effective L${eff.toFixed(2)}`,
+          `Effective L${mb.toFixed(2)}`,
           `Double: ${(chances.double * 100).toFixed(1)}%`,
           `Triple: ${(chances.triple * 100).toFixed(1)}%`,
           `Your level: ${stats.multiBricksLevel}`,
@@ -288,10 +315,106 @@ function rightEdge() {
         index: 1,
         title: 'Pickup radius',
         tooltip:
-          'Lets you collect bricks from further away. Personal — only your own level affects your reach.',
+          'Click bricks from further away. Personal — only your own level affects your reach.',
         lines: [
           `Your level: ${stats.pickupRadiusLevel}`,
           `Reach: ${pickupRadius(stats.pickupRadiusLevel).toFixed(1)} m`,
+        ],
+      })}
+      {powerupCard({
+        index: 2,
+        title: 'Faster spawns',
+        tooltip:
+          'Bricks spawn more often. World-wide; harmonically stacked across active players.',
+        lines: [
+          `Effective L${fs.toFixed(2)}`,
+          `Interval × ${spawnIntervalScale(fs).toFixed(2)}`,
+          `Your level: ${stats.fasterSpawnsLevel}`,
+        ],
+      })}
+      {powerupCard({
+        index: 3,
+        title: 'Lean dampener',
+        tooltip:
+          'Buildings lean over more slowly. World-wide; harmonically stacked across active players.',
+        lines: [
+          `Effective L${ld.toFixed(2)}`,
+          `Lean rate × ${leanRateScale(ld).toFixed(2)}`,
+          `Your level: ${stats.leanDampenerLevel}`,
+        ],
+      })}
+      {powerupCard({
+        index: 4,
+        title: 'Sturdy foundation',
+        tooltip:
+          'Buildings tolerate more lean before collapsing. World-wide; harmonically stacked.',
+        lines: [
+          `Effective L${sf.toFixed(2)}`,
+          `Threshold +${sturdyAngleBonus(sf).toFixed(1)}°`,
+          `Your level: ${stats.sturdyFoundationLevel}`,
+        ],
+      })}
+      {powerupCard({
+        index: 5,
+        title: 'Plumb Line',
+        tooltip:
+          'Each brick YOU collect straightens lean by a few extra degrees. Personal — only your level affects your bricks.',
+        lines: [
+          `Your level: ${stats.plumbLineLevel}`,
+          `Bonus: +${plumbLinePersonalBonus(stats.plumbLineLevel).toFixed(1)}° / brick`,
+        ],
+      })}
+      {powerupCard({
+        index: 6,
+        title: 'Plumb Line Teacher',
+        tooltip:
+          'A small extra straighten bonus added on top of EVERY brick collection in the room. World-wide; harmonically stacked.',
+        lines: [
+          `Effective L${getEffectivePlumbTeacherLevel().toFixed(2)}`,
+          `Bonus: +${plumbLineTeacherBonus(getEffectivePlumbTeacherLevel()).toFixed(1)}° / brick`,
+          `Your level: ${stats.plumbTeacherLevel}`,
+        ],
+      })}
+      {powerupCard({
+        index: 7,
+        title: 'Generous Contribution',
+        tooltip:
+          'Each brick YOU collect counts as more toward the building (and your lifetime). Personal.',
+        lines: [
+          `Your level: ${stats.generousLevel}`,
+          `Bonus: +${(contributionPersonalBonus(stats.generousLevel) * 100).toFixed(0)}%`,
+        ],
+      })}
+      {powerupCard({
+        index: 8,
+        title: 'Generous Teacher',
+        tooltip:
+          'A small extra value bonus on EVERY brick collection in the room. World-wide; harmonically stacked.',
+        lines: [
+          `Effective L${getEffectiveGenerousTeacherLevel().toFixed(2)}`,
+          `Bonus: +${(contributionTeacherBonus(getEffectiveGenerousTeacherLevel()) * 100).toFixed(0)}%`,
+          `Your level: ${stats.generousTeacherLevel}`,
+        ],
+      })}
+      {powerupCard({
+        index: 9,
+        title: 'Stockpile',
+        tooltip:
+          'Raises the cap on how many bricks can be on the field at once. World-wide; harmonically stacked across active players.',
+        lines: [
+          `Effective L${getEffectiveStockpileLevel().toFixed(2)}`,
+          `Cap × ${brickCapMultiplier(getEffectiveStockpileLevel()).toFixed(2)}`,
+          `Your level: ${stats.stockpileLevel}`,
+        ],
+      })}
+      {powerupCard({
+        index: 10,
+        title: 'Tithe',
+        tooltip:
+          "Keep a bigger cut of every brick you collect for upgrade currency. Doesn't help the building — only your spend power.",
+        lines: [
+          `Your level: ${stats.titheLevel}`,
+          `Bonus: +${(titheBonus(stats.titheLevel) * 100).toFixed(0)}% currency`,
         ],
       })}
     </UiEntity>
@@ -434,15 +557,14 @@ function bottomActions() {
 
 function skillTreeModal() {
   const stats = getMyStats()
-  const eff = getEffectiveMultiBricksLevel()
+  const mbEff = getEffectiveMultiBricksLevel()
+  const fsEff = getEffectiveFasterSpawnsLevel()
+  const ldEff = getEffectiveLeanDampenerLevel()
+  const sfEff = getEffectiveSturdyFoundationLevel()
   const available = stats.lifetimeContributions - stats.bricksSpent
 
-  const mbCost = levelUpCost(stats.multiBricksLevel)
-  const canMb =
-    stats.multiBricksLevel < MAX_MULTI_BRICK_LEVEL && available >= mbCost
-  const prCost = levelUpCost(stats.pickupRadiusLevel)
-  const canPr =
-    stats.pickupRadiusLevel < MAX_MULTI_BRICK_LEVEL && available >= prCost
+  const can = (level: number) =>
+    level < MAX_MULTI_BRICK_LEVEL && available >= levelUpCost(level)
 
   return (
     <UiEntity
@@ -490,21 +612,98 @@ function skillTreeModal() {
 
               {skillRow({
                 title: `Multi-bricks  L${stats.multiBricksLevel}`,
-                sub: `World-wide. Effective ${eff.toFixed(2)}.`,
-                cost: mbCost,
+                sub: `World-wide. Effective ${mbEff.toFixed(2)}.`,
+                cost: levelUpCost(stats.multiBricksLevel),
                 atMax: stats.multiBricksLevel >= MAX_MULTI_BRICK_LEVEL,
-                canBuy: canMb,
+                canBuy: can(stats.multiBricksLevel),
                 onBuy: () =>
                   room.send('levelUpMultiBricks', { ts: Date.now() }),
               })}
               {skillRow({
                 title: `Pickup radius  L${stats.pickupRadiusLevel}`,
                 sub: `Personal. Reach ${pickupRadius(stats.pickupRadiusLevel).toFixed(1)} m.`,
-                cost: prCost,
+                cost: levelUpCost(stats.pickupRadiusLevel),
                 atMax: stats.pickupRadiusLevel >= MAX_MULTI_BRICK_LEVEL,
-                canBuy: canPr,
+                canBuy: can(stats.pickupRadiusLevel),
                 onBuy: () =>
                   room.send('levelUpPickupRadius', { ts: Date.now() }),
+              })}
+              {skillRow({
+                title: `Faster spawns  L${stats.fasterSpawnsLevel}`,
+                sub: `World-wide. Effective ${fsEff.toFixed(2)}, interval × ${spawnIntervalScale(fsEff).toFixed(2)}.`,
+                cost: levelUpCost(stats.fasterSpawnsLevel),
+                atMax: stats.fasterSpawnsLevel >= MAX_MULTI_BRICK_LEVEL,
+                canBuy: can(stats.fasterSpawnsLevel),
+                onBuy: () =>
+                  room.send('levelUpFasterSpawns', { ts: Date.now() }),
+              })}
+              {skillRow({
+                title: `Lean dampener  L${stats.leanDampenerLevel}`,
+                sub: `World-wide. Effective ${ldEff.toFixed(2)}, lean rate × ${leanRateScale(ldEff).toFixed(2)}.`,
+                cost: levelUpCost(stats.leanDampenerLevel),
+                atMax: stats.leanDampenerLevel >= MAX_MULTI_BRICK_LEVEL,
+                canBuy: can(stats.leanDampenerLevel),
+                onBuy: () =>
+                  room.send('levelUpLeanDampener', { ts: Date.now() }),
+              })}
+              {skillRow({
+                title: `Sturdy foundation  L${stats.sturdyFoundationLevel}`,
+                sub: `World-wide. Effective ${sfEff.toFixed(2)}, threshold +${sturdyAngleBonus(sfEff).toFixed(1)}°.`,
+                cost: levelUpCost(stats.sturdyFoundationLevel),
+                atMax: stats.sturdyFoundationLevel >= MAX_MULTI_BRICK_LEVEL,
+                canBuy: can(stats.sturdyFoundationLevel),
+                onBuy: () =>
+                  room.send('levelUpSturdyFoundation', { ts: Date.now() }),
+              })}
+              {skillRow({
+                title: `Plumb Line  L${stats.plumbLineLevel}`,
+                sub: `Personal. Your bricks straighten +${plumbLinePersonalBonus(stats.plumbLineLevel).toFixed(1)}°.`,
+                cost: levelUpCost(stats.plumbLineLevel),
+                atMax: stats.plumbLineLevel >= MAX_MULTI_BRICK_LEVEL,
+                canBuy: can(stats.plumbLineLevel),
+                onBuy: () => room.send('levelUpPlumbLine', { ts: Date.now() }),
+              })}
+              {skillRow({
+                title: `Plumb Line Teacher  L${stats.plumbTeacherLevel}`,
+                sub: `World-wide. Eff ${getEffectivePlumbTeacherLevel().toFixed(2)}, +${plumbLineTeacherBonus(getEffectivePlumbTeacherLevel()).toFixed(1)}° to all bricks.`,
+                cost: levelUpCost(stats.plumbTeacherLevel),
+                atMax: stats.plumbTeacherLevel >= MAX_MULTI_BRICK_LEVEL,
+                canBuy: can(stats.plumbTeacherLevel),
+                onBuy: () =>
+                  room.send('levelUpPlumbTeacher', { ts: Date.now() }),
+              })}
+              {skillRow({
+                title: `Generous Contribution  L${stats.generousLevel}`,
+                sub: `Personal. Your bricks worth +${(contributionPersonalBonus(stats.generousLevel) * 100).toFixed(0)}%.`,
+                cost: levelUpCost(stats.generousLevel),
+                atMax: stats.generousLevel >= MAX_MULTI_BRICK_LEVEL,
+                canBuy: can(stats.generousLevel),
+                onBuy: () => room.send('levelUpGenerous', { ts: Date.now() }),
+              })}
+              {skillRow({
+                title: `Generous Teacher  L${stats.generousTeacherLevel}`,
+                sub: `World-wide. Eff ${getEffectiveGenerousTeacherLevel().toFixed(2)}, +${(contributionTeacherBonus(getEffectiveGenerousTeacherLevel()) * 100).toFixed(0)}% to all bricks.`,
+                cost: levelUpCost(stats.generousTeacherLevel),
+                atMax: stats.generousTeacherLevel >= MAX_MULTI_BRICK_LEVEL,
+                canBuy: can(stats.generousTeacherLevel),
+                onBuy: () =>
+                  room.send('levelUpGenerousTeacher', { ts: Date.now() }),
+              })}
+              {skillRow({
+                title: `Stockpile  L${stats.stockpileLevel}`,
+                sub: `World-wide. Eff ${getEffectiveStockpileLevel().toFixed(2)}, brick cap × ${brickCapMultiplier(getEffectiveStockpileLevel()).toFixed(2)}.`,
+                cost: levelUpCost(stats.stockpileLevel),
+                atMax: stats.stockpileLevel >= MAX_MULTI_BRICK_LEVEL,
+                canBuy: can(stats.stockpileLevel),
+                onBuy: () => room.send('levelUpStockpile', { ts: Date.now() }),
+              })}
+              {skillRow({
+                title: `Tithe  L${stats.titheLevel}`,
+                sub: `Personal. +${(titheBonus(stats.titheLevel) * 100).toFixed(0)}% upgrade currency on every brick you collect.`,
+                cost: levelUpCost(stats.titheLevel),
+                atMax: stats.titheLevel >= MAX_MULTI_BRICK_LEVEL,
+                canBuy: can(stats.titheLevel),
+                onBuy: () => room.send('levelUpTithe', { ts: Date.now() }),
               })}
 
               {roundedButton({

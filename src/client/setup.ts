@@ -20,12 +20,30 @@ export type MyStats = {
   bricksSpent: number
   multiBricksLevel: number
   pickupRadiusLevel: number
+  fasterSpawnsLevel: number
+  leanDampenerLevel: number
+  sturdyFoundationLevel: number
+  plumbLineLevel: number
+  plumbTeacherLevel: number
+  generousLevel: number
+  generousTeacherLevel: number
+  stockpileLevel: number
+  titheLevel: number
 }
 let myStats: MyStats = {
   lifetimeContributions: 0,
   bricksSpent: 0,
   multiBricksLevel: 0,
   pickupRadiusLevel: 0,
+  fasterSpawnsLevel: 0,
+  leanDampenerLevel: 0,
+  sturdyFoundationLevel: 0,
+  plumbLineLevel: 0,
+  plumbTeacherLevel: 0,
+  generousLevel: 0,
+  generousTeacherLevel: 0,
+  stockpileLevel: 0,
+  titheLevel: 0,
 }
 
 export function getMyContribution(): number {
@@ -45,6 +63,15 @@ export function initClient() {
       bricksSpent: data.bricksSpent,
       multiBricksLevel: data.multiBricksLevel,
       pickupRadiusLevel: data.pickupRadiusLevel,
+      fasterSpawnsLevel: data.fasterSpawnsLevel,
+      leanDampenerLevel: data.leanDampenerLevel,
+      sturdyFoundationLevel: data.sturdyFoundationLevel,
+      plumbLineLevel: data.plumbLineLevel,
+      plumbTeacherLevel: data.plumbTeacherLevel,
+      generousLevel: data.generousLevel,
+      generousTeacherLevel: data.generousTeacherLevel,
+      stockpileLevel: data.stockpileLevel,
+      titheLevel: data.titheLevel,
     }
     if (data.pickupRadiusLevel !== prevRadiusLevel) {
       // Pull existing brick handlers and let brickHandlerSystem re-register
@@ -205,6 +232,48 @@ export function getBrickCount(): number {
 export function getEffectiveMultiBricksLevel(): number {
   for (const [_, ws] of engine.getEntitiesWith(WorldState)) {
     return ws.effectiveMultiBricksLevel
+  }
+  return 0
+}
+
+export function getEffectiveFasterSpawnsLevel(): number {
+  for (const [_, ws] of engine.getEntitiesWith(WorldState)) {
+    return ws.effectiveFasterSpawnsLevel
+  }
+  return 0
+}
+
+export function getEffectiveLeanDampenerLevel(): number {
+  for (const [_, ws] of engine.getEntitiesWith(WorldState)) {
+    return ws.effectiveLeanDampenerLevel
+  }
+  return 0
+}
+
+export function getEffectiveSturdyFoundationLevel(): number {
+  for (const [_, ws] of engine.getEntitiesWith(WorldState)) {
+    return ws.effectiveSturdyFoundationLevel
+  }
+  return 0
+}
+
+export function getEffectivePlumbTeacherLevel(): number {
+  for (const [_, ws] of engine.getEntitiesWith(WorldState)) {
+    return ws.effectivePlumbTeacherLevel
+  }
+  return 0
+}
+
+export function getEffectiveGenerousTeacherLevel(): number {
+  for (const [_, ws] of engine.getEntitiesWith(WorldState)) {
+    return ws.effectiveGenerousTeacherLevel
+  }
+  return 0
+}
+
+export function getEffectiveStockpileLevel(): number {
+  for (const [_, ws] of engine.getEntitiesWith(WorldState)) {
+    return ws.effectiveStockpileLevel
   }
   return 0
 }

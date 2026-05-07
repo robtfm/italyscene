@@ -5,6 +5,12 @@ export const WorldState = engine.defineComponent('italyscene:WorldState', {
   brickCount: Schemas.Int,
   currentBuildingKey: Schemas.String,
   effectiveMultiBricksLevel: Schemas.Float,
+  effectiveFasterSpawnsLevel: Schemas.Float,
+  effectiveLeanDampenerLevel: Schemas.Float,
+  effectiveSturdyFoundationLevel: Schemas.Float,
+  effectivePlumbTeacherLevel: Schemas.Float,
+  effectiveGenerousTeacherLevel: Schemas.Float,
+  effectiveStockpileLevel: Schemas.Float,
 })
 
 export const BuildingState = engine.defineComponent('italyscene:BuildingState', {
