@@ -1,23 +1,13 @@
-import {} from '@dcl/sdk/math'
-import { engine, pointerEventsSystem, InputAction } from '@dcl/sdk/ecs'
-
-import { setupUi, registerFountainClick } from './ui'
-import { brickSpawnSystem, buildingSystem } from './game'
+import { isServer } from '@dcl/sdk/network'
+import { initServer } from './server/server'
+import { initClient } from './client/setup'
+import { setupUi } from './client/ui'
 
 export function main() {
-  engine.addSystem(brickSpawnSystem)
-  engine.addSystem(buildingSystem)
-
-  setupUi()
-
-  const fountain = engine.getEntityOrNullByName('Fountain')
-  if (fountain) {
-    pointerEventsSystem.onPointerDown(
-      {
-        entity: fountain,
-        opts: { button: InputAction.IA_PRIMARY, hoverText: 'Tocca la fontana' },
-      },
-      () => registerFountainClick()
-    )
+  if (isServer()) {
+    initServer()
+    return
   }
+  initClient()
+  setupUi()
 }
