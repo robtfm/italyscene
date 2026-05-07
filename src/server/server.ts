@@ -36,7 +36,26 @@ type PlayerProfile = {
   unlockedTier: number
 }
 const PROFILE_KEY = 'profile'
+const WORLD_KEY = 'worldState'
 const COMPLETION_CELEBRATION_S = 10
+const WORLD_SAVE_INTERVAL_S = 3
+const FAST_FORWARD_CAP_S = 30 * 60
+
+type SerializedWorldState = {
+  brickCount: number
+  currentBuildingKey: string
+  nextBrickId: number
+  contributors: string[]
+  building: {
+    riseProgress: number
+    currentLean: number
+    collapsing: boolean
+    collapseTime: number
+    collapseStartProgress: number
+    completedTime: number
+  }
+  savedAt: number // Date.now() ms
+}
 const profilePromises = new Map<string, Promise<PlayerProfile>>()
 const greetedEntities = new Set<Entity>()
 
@@ -74,6 +93,99 @@ function ensureProfile(address: string): Promise<PlayerProfile> {
   return profilePromises.get(address)!
 }
 
+async function loadWorldState(): Promise<SerializedWorldState | null> {
+  try {
+    const data = await Storage.get<SerializedWorldState>(WORLD_KEY)
+    return data ?? null
+  } catch (e) {
+    console.log('[SERVER] loadWorldState error', e)
+    return null
+  }
+}
+
+async function saveWorldState() {
+  if (!worldStateEntity) return
+  const ws = WorldState.get(worldStateEntity)
+  const activeEntity = findBuildingStateEntity(ws.currentBuildingKey)
+  if (!activeEntity) return
+  const bs = BuildingState.get(activeEntity)
+  const data: SerializedWorldState = {
+    brickCount: ws.brickCount,
+    currentBuildingKey: ws.currentBuildingKey,
+    nextBrickId,
+    contributors: [...currentRoundContributors],
+    building: {
+      riseProgress: bs.riseProgress,
+      currentLean: bs.currentLean,
+      collapsing: bs.collapsing,
+      collapseTime: bs.collapseTime,
+      collapseStartProgress: bs.collapseStartProgress,
+      completedTime: bs.completedTime,
+    },
+    savedAt: Date.now(),
+  }
+  try {
+    await Storage.set(WORLD_KEY, data)
+  } catch (e) {
+    console.log('[SERVER] saveWorldState error', e)
+  }
+}
+
+async function restoreWorldState() {
+  const saved = await loadWorldState()
+  if (!saved) {
+    console.log('[SERVER] No persisted world state — starting fresh')
+    return
+  }
+  if (!worldStateEntity) return
+
+  const ws = WorldState.getMutable(worldStateEntity)
+  ws.brickCount = saved.brickCount
+  ws.currentBuildingKey = saved.currentBuildingKey
+  nextBrickId = Math.max(nextBrickId, saved.nextBrickId)
+  for (const a of saved.contributors) currentRoundContributors.add(a)
+
+  const activeEntity = findBuildingStateEntity(saved.currentBuildingKey)
+  if (activeEntity) {
+    const bs = BuildingState.getMutable(activeEntity)
+    bs.riseProgress = saved.building.riseProgress
+    bs.currentLean = saved.building.currentLean
+    bs.collapsing = saved.building.collapsing
+    bs.collapseTime = saved.building.collapseTime
+    bs.collapseStartProgress = saved.building.collapseStartProgress
+    bs.completedTime = saved.building.completedTime
+  }
+
+  const elapsedSec = Math.min(
+    FAST_FORWARD_CAP_S,
+    Math.max(0, (Date.now() - saved.savedAt) / 1000)
+  )
+  console.log(
+    '[SERVER] Restored world state, fast-forwarding',
+    elapsedSec.toFixed(1),
+    's'
+  )
+  fastForward(elapsedSec)
+}
+
+function fastForward(totalSec: number) {
+  const STEP = 0.5
+  let remaining = totalSec
+  while (remaining > 0) {
+    const dt = Math.min(STEP, remaining)
+    serverBuildingSystem(dt)
+    remaining -= dt
+  }
+}
+
+let worldSaveTimer = 0
+function worldSaveSystem(dt: number) {
+  worldSaveTimer += dt
+  if (worldSaveTimer < WORLD_SAVE_INTERVAL_S) return
+  worldSaveTimer = 0
+  void saveWorldState()
+}
+
 async function initPlayer(rawAddress: string) {
   const address = rawAddress.toLowerCase()
   const profile = await ensureProfile(address)
@@ -92,7 +204,7 @@ function playerJoinSystem() {
   }
 }
 
-export function initServer() {
+export async function initServer() {
   console.log('[SERVER] initServer')
 
   worldStateEntity = engine.addEntity()
@@ -105,6 +217,8 @@ export function initServer() {
   for (const cfg of BUILDING_CONFIGS) {
     attachBuildingState(cfg)
   }
+
+  await restoreWorldState()
 
   room.onMessage('collectBrick', (data, context) => {
     if (!context) return
@@ -120,6 +234,7 @@ export function initServer() {
   engine.addSystem(brickSpawnSystem)
   engine.addSystem(serverBuildingSystem)
   engine.addSystem(playerJoinSystem)
+  engine.addSystem(worldSaveSystem)
 }
 
 function attachBuildingState(cfg: BuildingConfig) {

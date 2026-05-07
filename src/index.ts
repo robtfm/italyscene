@@ -3,9 +3,9 @@ import { initServer } from './server/server'
 import { initClient } from './client/setup'
 import { setupUi } from './client/ui'
 
-export function main() {
+export async function main() {
   if (isServer()) {
-    initServer()
+    await initServer()
     return
   }
   initClient()
