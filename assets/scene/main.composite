@@ -515,7 +515,6 @@
                 "entity": 0,
                 "open": true,
                 "children": [
-                  513,
                   514,
                   515,
                   516,
@@ -1403,10 +1402,6 @@
               },
               {
                 "entity": 2,
-                "children": []
-              },
-              {
-                "entity": 513,
                 "children": []
               },
               {
@@ -5190,27 +5185,6 @@
     {
       "name": "core::Transform",
       "data": {
-        "513": {
-          "json": {
-            "position": {
-              "x": 8,
-              "y": 0.01,
-              "z": 8
-            },
-            "scale": {
-              "x": 1,
-              "y": 1,
-              "z": 1
-            },
-            "rotation": {
-              "x": 0,
-              "y": 0,
-              "z": 0,
-              "w": 1
-            },
-            "parent": 0
-          }
-        },
         "514": {
           "json": {
             "position": {
@@ -23675,13 +23649,6 @@
     {
       "name": "core::GltfContainer",
       "data": {
-        "513": {
-          "json": {
-            "src": "assets/Models/fountain-03.glb",
-            "visibleMeshesCollisionMask": 0,
-            "invisibleMeshesCollisionMask": 3
-          }
-        },
         "514": {
           "json": {
             "src": "assets/Models/sphere.glb",
@@ -24292,11 +24259,6 @@
         "serializationType": "map"
       },
       "data": {
-        "513": {
-          "json": {
-            "value": "Fountain"
-          }
-        },
         "514": {
           "json": {
             "value": "BigHill_0"

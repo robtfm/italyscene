@@ -23,7 +23,6 @@ import {
 } from '../shared/upgrades'
 
 const SCENE_SIZE = 80
-const FOUNTAIN = { x: 8, z: 8, clear: 11 }
 const SPAWN_AREA = { x: 0, z: 0, clear: 9 }
 
 const BRICK_SPAWN_INTERVAL_S = 5
@@ -380,7 +379,6 @@ function spawnBrick() {
   for (let i = 0; i < 30; i++) {
     x = 2 + Math.random() * (SCENE_SIZE - 4)
     z = 2 + Math.random() * (SCENE_SIZE - 4)
-    if (Math.hypot(x - FOUNTAIN.x, z - FOUNTAIN.z) < FOUNTAIN.clear) continue
     if (Math.hypot(x - SPAWN_AREA.x, z - SPAWN_AREA.z) < SPAWN_AREA.clear) continue
     break
   }
