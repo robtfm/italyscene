@@ -2,6 +2,7 @@ import {
   engine,
   Entity,
   Name,
+  PlayerIdentityData,
   Transform,
   MeshRenderer,
   MeshCollider,
@@ -10,6 +11,7 @@ import {
 } from '@dcl/sdk/ecs'
 import { Color4 } from '@dcl/sdk/math'
 import { syncEntity } from '@dcl/sdk/network'
+import { Storage } from '@dcl/sdk/server'
 import { Brick, BuildingState, WorldState } from '../shared/schemas'
 import { room } from '../shared/messages'
 import { BUILDING_CONFIGS, BuildingConfig } from '../shared/buildings'
@@ -26,7 +28,59 @@ const BRICK_HOVER_HEIGHT = 1.2
 let worldStateEntity: Entity | null = null
 let timeSinceSpawn = 0
 let nextBrickId = 1
-const contributions = new Map<string, number>()
+
+type PlayerProfile = { lifetimeContributions: number }
+const PROFILE_KEY = 'profile'
+const profilePromises = new Map<string, Promise<PlayerProfile>>()
+const greetedEntities = new Set<Entity>()
+
+async function loadProfile(address: string): Promise<PlayerProfile> {
+  try {
+    const raw = await Storage.player.get<string>(address, PROFILE_KEY)
+    if (raw) {
+      const parsed = JSON.parse(raw)
+      if (typeof parsed?.lifetimeContributions === 'number') {
+        return parsed as PlayerProfile
+      }
+    }
+  } catch (e) {
+    console.log('[SERVER] loadProfile error', address, e)
+  }
+  return { lifetimeContributions: 0 }
+}
+
+async function saveProfile(address: string, profile: PlayerProfile) {
+  try {
+    await Storage.player.set(address, PROFILE_KEY, JSON.stringify(profile))
+  } catch (e) {
+    console.log('[SERVER] saveProfile error', address, e)
+  }
+}
+
+function ensureProfile(address: string): Promise<PlayerProfile> {
+  if (!profilePromises.has(address)) {
+    profilePromises.set(address, loadProfile(address))
+  }
+  return profilePromises.get(address)!
+}
+
+async function initPlayer(rawAddress: string) {
+  const address = rawAddress.toLowerCase()
+  const profile = await ensureProfile(address)
+  room.send(
+    'contributionUpdate',
+    { count: profile.lifetimeContributions },
+    { to: [rawAddress] }
+  )
+}
+
+function playerJoinSystem() {
+  for (const [entity, identity] of engine.getEntitiesWith(PlayerIdentityData)) {
+    if (greetedEntities.has(entity)) continue
+    greetedEntities.add(entity)
+    void initPlayer(identity.address)
+  }
+}
 
 export function initServer() {
   console.log('[SERVER] initServer')
@@ -52,6 +106,7 @@ export function initServer() {
 
   engine.addSystem(brickSpawnSystem)
   engine.addSystem(serverBuildingSystem)
+  engine.addSystem(playerJoinSystem)
 }
 
 function attachBuildingState(cfg: BuildingConfig) {
@@ -178,11 +233,16 @@ function handleCollectBrick(brickId: number, playerAddress: string) {
   console.log('[SERVER] collectBrick: no entity with brickId', brickId)
 }
 
-function creditPlayer(rawAddress: string, amount: number) {
+async function creditPlayer(rawAddress: string, amount: number) {
   const address = rawAddress.toLowerCase()
-  const next = (contributions.get(address) ?? 0) + amount
-  contributions.set(address, next)
-  room.send('contributionUpdate', { count: next }, { to: [rawAddress] })
+  const profile = await ensureProfile(address)
+  profile.lifetimeContributions += amount
+  void saveProfile(address, profile)
+  room.send(
+    'contributionUpdate',
+    { count: profile.lifetimeContributions },
+    { to: [rawAddress] }
+  )
 }
 
 function incrementBrickCount(amount: number) {
