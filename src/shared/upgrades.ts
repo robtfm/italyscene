@@ -92,11 +92,15 @@ export function titheBonus(personalLevel: number): number {
   return TITHE_PERSONAL_MAX * levelToFraction(personalLevel)
 }
 
+// Stack contributions sorted high→low. Position 0 keeps full weight (solo
+// baseline unchanged); subsequent positions decay as 5/(i+5), gentler than
+// the classic 1/(i+1) so subsequent players still feel meaningful.
+//   i=0 → 1.00, i=1 → 0.83, i=2 → 0.71, i=3 → 0.63, i=4 → 0.56 ...
 export function harmonicSum(levels: number[]): number {
   const sorted = [...levels].sort((a, b) => b - a)
   let sum = 0
   for (let i = 0; i < sorted.length; i++) {
-    sum += sorted[i] / (i + 1)
+    sum += (sorted[i] * 5) / (i + 5)
   }
   return sum
 }
