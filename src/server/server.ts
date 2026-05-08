@@ -773,8 +773,8 @@ function presentPlayerAddresses(): Set<string> {
 
 async function handleBuildingCollapse(cfg: BuildingConfig) {
   console.log('[SERVER] Building collapsed:', cfg.entityName, '— hard repick')
-  const nextKey = await pickNextBuildingKey(cfg.entityName)
-  await transitionToBuilding(nextKey, cfg)
+  const next = await pickNextBuildingKey(cfg.entityName)
+  await transitionToBuilding(next, cfg)
 }
 
 async function handleBuildingCompletion(cfg: BuildingConfig) {
@@ -806,22 +806,20 @@ async function handleBuildingCompletion(cfg: BuildingConfig) {
     void saveProfile(address, profile)
   }
 
-  // Bump this building's persistent difficulty level.
-  if (completedEntity) {
-    const s = BuildingState.getMutable(completedEntity)
-    s.level = s.level + 1
-    console.log(
-      '[SERVER] Building completed:',
-      cfg.entityName,
-      '— Lv',
-      s.level,
-      '— eligible contributors:',
-      eligible.length
-    )
-  }
+  console.log(
+    '[SERVER] Building completed:',
+    cfg.entityName,
+    '— Lv',
+    completedLevel + 1,
+    '— eligible contributors:',
+    eligible.length
+  )
+  // The building's state.level is no longer auto-bumped; pickNextBuildingKey
+  // sets the level on the chosen building based on present players' pool
+  // entry. Persistence still tracks the most recent level played.
 
-  const nextKey = await pickNextBuildingKey(cfg.entityName)
-  await transitionToBuilding(nextKey, cfg)
+  const next = await pickNextBuildingKey(cfg.entityName)
+  await transitionToBuilding(next, cfg)
 }
 
 // Highest LEVEL the player currently has unlocked (0-indexed: 0 = first).
@@ -830,26 +828,45 @@ function highestUnlockedLevel(profile: PlayerProfile): number {
   return Math.floor(profile.availableBuildings / BUILDING_CONFIGS.length)
 }
 
-// How many BUILDINGS this player has unlocked at all (for base-pool sizing).
-function unlockedBuildingCount(profile: PlayerProfile): number {
-  return Math.min(BUILDING_CONFIGS.length, profile.availableBuildings + 1)
+// Each pool entry is a (building, level) pair indexed linearly by
+//   index = level × N + (tier - 1)
+// where N = number of buildings. So index 0 = Pisa Lv 1, 1 = Colosseum Lv 1,
+// 5 = Doge's Lv 1, 6 = Pisa Lv 2, etc. A player's availableBuildings counter
+// is the highest index they have access to. To advance their counter, they
+// must beat a building at level >= floor(avail / N).
+type PoolEntry = { entityName: string; level: number; index: number }
+
+function decodePoolIndex(index: number): PoolEntry | null {
+  const N = BUILDING_CONFIGS.length
+  const tier = (index % N) + 1
+  const level = Math.floor(index / N)
+  const cfg = BUILDING_CONFIGS.find((c) => c.tier === tier)
+  if (!cfg) return null
+  return { entityName: cfg.entityName, level, index }
 }
 
-// What buildings does this player WANT next?
-//   1. The next building in the linear chain (advances availableBuildings).
-//   2. Any building that gates an upgrade the player can afford to buy
-//      RIGHT NOW but is locked behind a max-level wall on a building they
-//      already have unlocked. Beating it will lift the gate by one level.
-function wantedBuildingsFor(profile: PlayerProfile): BuildingConfig[] {
-  const out: BuildingConfig[] = []
+function encodePoolIndex(entityName: string, level: number): number | null {
+  const cfg = BUILDING_CONFIGS.find((c) => c.entityName === entityName)
+  if (!cfg) return null
+  return level * BUILDING_CONFIGS.length + (cfg.tier - 1)
+}
 
-  const nextTier =
-    (profile.availableBuildings % BUILDING_CONFIGS.length) + 1
-  const nextChain = BUILDING_CONFIGS.find((c) => c.tier === nextTier)
-  if (nextChain) out.push(nextChain)
+// What pool indices does this player WANT next?
+//   1. The "highest available" index — their availableBuildings counter
+//      itself, beating which advances them by one rung.
+//   2. Each (gateBuilding, gateMax) pair where the player has currency to
+//      buy a gated upgrade right now but is locked at the building's max.
+function wantedIndicesFor(
+  profile: PlayerProfile,
+  maxAvail: number
+): number[] {
+  const out: number[] = []
+
+  if (profile.availableBuildings <= maxAvail) {
+    out.push(profile.availableBuildings)
+  }
 
   const available = profile.lifetimeContributions - profile.bricksSpent
-  const unlockedCount = unlockedBuildingCount(profile)
   for (const upgradeKey of Object.keys(UPGRADE_GATES)) {
     const currentLevel = (profile as Record<string, unknown>)[
       upgradeKey
@@ -862,17 +879,20 @@ function wantedBuildingsFor(profile: PlayerProfile): BuildingConfig[] {
       profile.maxBuildingLevel
     )
     if (!gate) continue
-    const cfg = BUILDING_CONFIGS.find((c) => c.entityName === gate.building)
-    if (!cfg) continue
-    if (cfg.tier > unlockedCount) continue
-    if (out.some((c) => c.entityName === cfg.entityName)) continue
-    out.push(cfg)
+    // Need to beat the gate building at state.level >= currentMax to bump
+    // max from currentMax to currentMax+1. gate.required is currentMax+1
+    // (1-indexed); the 0-indexed state.level we want is gate.required - 1.
+    const targetLevel = gate.required - 1
+    const idx = encodePoolIndex(gate.building, targetLevel)
+    if (idx == null || idx > maxAvail) continue
+    if (out.includes(idx)) continue
+    out.push(idx)
   }
 
   return out
 }
 
-async function pickNextBuildingKey(currentKey: string): Promise<string> {
+async function pickNextBuildingKey(_currentKey: string): Promise<PoolEntry> {
   type Entry = { address: string; profile: PlayerProfile }
   const players: Entry[] = []
   for (const [_, identity] of engine.getEntitiesWith(PlayerIdentityData)) {
@@ -880,71 +900,63 @@ async function pickNextBuildingKey(currentKey: string): Promise<string> {
     players.push({ address, profile: await ensureProfile(address) })
   }
 
-  // Base pool: every building up to the highest count any present player has
-  // unlocked. Each entry seeded with 1/n (n = unlocked count) so the base
-  // sums to a unit weight regardless of pool size. Excludes the just-completed
-  // building.
-  const maxBuildingsUnlocked = players.reduce(
-    (m, p) => Math.max(m, unlockedBuildingCount(p.profile)),
-    1
+  // Base pool: every (building, level) index 0..maxAvail across present
+  // players. Each seeded with 1/n weight so the base sums to a unit weight.
+  // We don't exclude the just-completed entry — it stays in the pool as a
+  // low-priority background option (most often pulled past by another
+  // player's wanted entries).
+  const maxAvail = players.reduce(
+    (m, p) => Math.max(m, p.profile.availableBuildings),
+    0
   )
-  const baseWeight = 1 / maxBuildingsUnlocked
-  const weights = new Map<string, number>()
-  for (const cfg of BUILDING_CONFIGS) {
-    if (cfg.tier > maxBuildingsUnlocked) continue
-    if (cfg.entityName === currentKey) continue
-    weights.set(cfg.entityName, baseWeight)
-  }
-  if (weights.size === 0) return currentKey
+  const poolSize = maxAvail + 1
+  const baseWeight = 1 / poolSize
+  const weights = new Map<number, number>()
+  for (let i = 0; i <= maxAvail; i++) weights.set(i, baseWeight)
 
-  // Each player adds (1 + pity) / pool-size to each building in their pool.
-  // This normalizes contributions across players regardless of how big their
-  // pools are; the +1 ensures a satisfied player still contributes a full
-  // unit-weight to their pool (so they aren't invisible).
+  // Each player adds (1 + pity) / |pool| to each entry in their pool.
   for (const p of players) {
-    const pool = wantedBuildingsFor(p.profile)
-    if (pool.length === 0) continue
-    const contribution = (1 + p.profile.pity) / pool.length
-    for (const cfg of pool) {
-      if (!weights.has(cfg.entityName)) continue
-      weights.set(
-        cfg.entityName,
-        weights.get(cfg.entityName)! + contribution
-      )
+    const wanted = wantedIndicesFor(p.profile, maxAvail)
+    if (wanted.length === 0) continue
+    const contribution = (1 + p.profile.pity) / wanted.length
+    for (const idx of wanted) {
+      weights.set(idx, (weights.get(idx) ?? 0) + contribution)
     }
   }
 
   const total = [...weights.values()].reduce((a, b) => a + b, 0)
   let r = Math.random() * total
-  let chosen: string | null = null
-  for (const [key, w] of weights) {
+  let chosenIdx = 0
+  for (const [idx, w] of weights) {
     r -= w
     if (r <= 0) {
-      chosen = key
+      chosenIdx = idx
       break
     }
   }
-  if (!chosen) chosen = [...weights.keys()][0]
+  const chosen =
+    decodePoolIndex(chosenIdx) ?? decodePoolIndex(0)!
 
-  // Pity update: reset for any player whose progression would be advanced by
-  // the chosen building (i.e., its current level >= their highest-unlocked
-  // level), otherwise +1. The "advance" rule covers both wanted-pool hits and
-  // any building rolled at-or-above the player's frontier level — both flavors
-  // count as forward progress.
-  const chosenEntity = findBuildingStateEntity(chosen)
-  const chosenLevel = chosenEntity
-    ? BuildingState.get(chosenEntity).level
-    : 0
+  // Pity update: reset for any player whose progression would advance by
+  // beating this entry — either (a) the chosen index equals or exceeds their
+  // chain frontier (advances availableBuildings), or (b) chosen.level >=
+  // their current max for the building (advances per-building max).
   for (const p of players) {
-    const required = highestUnlockedLevel(p.profile)
-    p.profile.pity = chosenLevel >= required ? 0 : p.profile.pity + 1
+    const advancesAvail = chosenIdx >= p.profile.availableBuildings
+    const advancesMax =
+      chosen.level >=
+      (p.profile.maxBuildingLevel[chosen.entityName] ?? 0)
+    p.profile.pity = advancesAvail || advancesMax ? 0 : p.profile.pity + 1
     void saveProfile(p.address, p.profile)
   }
 
   return chosen
 }
 
-async function transitionToBuilding(nextKey: string, completedCfg: BuildingConfig) {
+async function transitionToBuilding(
+  next: PoolEntry,
+  completedCfg: BuildingConfig
+) {
   if (!worldStateEntity) return
   const ws = WorldState.getMutable(worldStateEntity)
 
@@ -961,11 +973,13 @@ async function transitionToBuilding(nextKey: string, completedCfg: BuildingConfi
     s.completedTime = 0
   }
 
-  // Reset the new building's state and lazy-init flag so it picks up its
-  // composite-loaded baseGroundY on next tick.
-  const nextEntity = findBuildingStateEntity(nextKey)
+  // Reset the new building's state, set its level to the picked entry's
+  // level, and clear lazy-init flag so it re-reads its composite-loaded
+  // baseGroundY on next tick.
+  const nextEntity = findBuildingStateEntity(next.entityName)
   if (nextEntity) {
     const s = BuildingState.getMutable(nextEntity)
+    s.level = next.level
     s.riseProgress = 0
     s.currentLean = 0
     s.collapsing = false
@@ -976,10 +990,10 @@ async function transitionToBuilding(nextKey: string, completedCfg: BuildingConfi
   }
 
   ws.brickCount = 0
-  ws.currentBuildingKey = nextKey
+  ws.currentBuildingKey = next.entityName
   currentRoundContributors.clear()
 
-  console.log('[SERVER] Transitioning to', nextKey)
+  console.log('[SERVER] Transitioning to', next.entityName, 'Lv', next.level + 1)
 }
 
 function incrementBrickCount(amount: number, straightenMultiplier = 1) {

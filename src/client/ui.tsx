@@ -48,6 +48,7 @@ const panelBlack = Color4.create(0, 0, 0, 0.55)
 const black = Color4.Black()
 
 let skillTreeOpen = false
+let statsOpen = false
 let hoveredTooltip: string | null = null
 let hoveredCardIndex = 0
 const acknowledgedBuyables = new Set<string>()
@@ -215,6 +216,7 @@ const uiComponent = () => (
     {bottomActions()}
     {hoveredTooltip ? tooltipBox(hoveredTooltip) : null}
     {skillTreeOpen ? skillTreeModal() : null}
+    {statsOpen ? statsModal() : null}
   </UiEntity>
 )
 
@@ -638,6 +640,16 @@ function bottomActions() {
         )
       })()}
       {roundedButton({
+        value: 'Stats',
+        variant: 'secondary',
+        width: 110,
+        margin: '0 4px',
+        fontSize: 12,
+        onMouseDown: () => {
+          statsOpen = true
+        },
+      })}
+      {roundedButton({
         value: 'DEBUG: +1 brick',
         variant: 'secondary',
         margin: '0 4px',
@@ -868,6 +880,141 @@ function skillTreeModal() {
           ),
         })}
       </UiEntity>
+    </UiEntity>
+  )
+}
+
+function statsModal() {
+  const stats = getMyStats()
+  const available = stats.lifetimeContributions - stats.bricksSpent
+  return (
+    <UiEntity
+      uiTransform={{
+        positionType: 'absolute',
+        width: '100%',
+        height: '100%',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 100,
+      }}
+      uiBackground={{ color: panelBlack }}
+      onMouseDown={() => {
+        statsOpen = false
+      }}
+    >
+      <UiEntity
+        uiTransform={{ width: 460 }}
+        onMouseDown={() => {
+          /* swallow click */
+        }}
+      >
+        {framedPanel({
+          width: '100%',
+          padding: 12,
+          children: (
+            <UiEntity
+              uiTransform={{
+                width: '100%',
+                flexDirection: 'column',
+                alignItems: 'center',
+              }}
+            >
+              <Label
+                value="Your stats"
+                fontSize={20}
+                color={piazzaRed}
+                uiTransform={{ width: '100%', height: 30 }}
+              />
+
+              {statsLine('Lifetime bricks', stats.lifetimeContributions)}
+              {statsLine('Spent on upgrades', stats.bricksSpent)}
+              {statsLine('Available', available)}
+
+              <Label
+                value="Buildings — your max level"
+                fontSize={12}
+                color={black}
+                uiTransform={{ width: '100%', height: 20, margin: '12px 0 4px 0' }}
+              />
+
+              {BUILDING_CONFIGS.map((cfg) =>
+                buildingStatsRow({
+                  name: cfg.displayName,
+                  yourMax: stats.maxBuildingLevel[cfg.entityName] ?? 0,
+                })
+              )}
+
+              {roundedButton({
+                value: 'Close',
+                variant: 'secondary',
+                width: 100,
+                height: 28,
+                margin: '12px 0 0 0',
+                onMouseDown: () => {
+                  statsOpen = false
+                },
+              })}
+            </UiEntity>
+          ),
+        })}
+      </UiEntity>
+    </UiEntity>
+  )
+}
+
+function statsLine(label: string, value: number) {
+  return (
+    <UiEntity
+      uiTransform={{
+        width: '100%',
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        height: 20,
+      }}
+    >
+      <Label
+        value={label}
+        fontSize={13}
+        color={black}
+        uiTransform={{ width: '60%', height: 20 }}
+      />
+      <Label
+        value={`${value}`}
+        fontSize={13}
+        color={piazzaRed}
+        uiTransform={{ width: '40%', height: 20 }}
+        textAlign="middle-right"
+      />
+    </UiEntity>
+  )
+}
+
+function buildingStatsRow(opts: { name: string; yourMax: number }) {
+  return (
+    <UiEntity
+      uiTransform={{
+        width: '100%',
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        padding: 4,
+        margin: '2px 0',
+        borderRadius: 4,
+      }}
+      uiBackground={{ color: Color4.create(0, 0, 0, 0.05) }}
+    >
+      <Label
+        value={opts.name}
+        fontSize={13}
+        color={black}
+        uiTransform={{ width: '70%', height: 20 }}
+      />
+      <Label
+        value={`Lv ${opts.yourMax}`}
+        fontSize={13}
+        color={opts.yourMax > 0 ? piazzaRed : black}
+        uiTransform={{ width: '30%', height: 20 }}
+        textAlign="middle-right"
+      />
     </UiEntity>
   )
 }
