@@ -15,7 +15,12 @@ import { syncEntity } from '@dcl/sdk/network'
 import { Storage } from '@dcl/sdk/server'
 import { Brick, BuildingState, WorldState } from '../shared/schemas'
 import { room } from '../shared/messages'
-import { BUILDING_CONFIGS, BuildingConfig } from '../shared/buildings'
+import {
+  BUILDING_CONFIGS,
+  BuildingConfig,
+  bricksRequiredFor,
+  brickStraightenFor,
+} from '../shared/buildings'
 import {
   brickCapMultiplier,
   contributionPersonalBonus,
@@ -50,6 +55,11 @@ type PlayerProfile = {
   completionsByBuilding: Record<string, number>
   unlockedTier: number
   bricksSpent: number
+  // Pity counter: increments every time a building gets picked that's NOT in
+  // this player's wanted pool. Resets to 0 on a hit. Their per-building
+  // contribution to the weighted pick is (pity + 1), so unsatisfied players
+  // gradually pull the choice toward what they want.
+  pity: number
   multiBricksLevel: number
   pickupRadiusLevel: number
   fasterSpawnsLevel: number
@@ -81,6 +91,9 @@ type SerializedWorldState = {
     collapseStartProgress: number
     completedTime: number
   }
+  // Persistent per-building progression level, keyed by buildingKey
+  // (every entry survives across server restarts and building rotations).
+  buildingLevels?: Record<string, number>
   savedAt: number // Date.now() ms
 }
 const profilePromises = new Map<string, Promise<PlayerProfile>>()
@@ -92,6 +105,7 @@ function defaultProfile(): PlayerProfile {
     completionsByBuilding: {},
     unlockedTier: 1,
     bricksSpent: 0,
+    pity: 0,
     multiBricksLevel: 0,
     pickupRadiusLevel: 0,
     fasterSpawnsLevel: 0,
@@ -117,6 +131,7 @@ async function loadProfile(address: string): Promise<PlayerProfile> {
           completionsByBuilding: parsed.completionsByBuilding ?? {},
           unlockedTier: parsed.unlockedTier ?? 1,
           bricksSpent: parsed.bricksSpent ?? 0,
+          pity: parsed.pity ?? 0,
           multiBricksLevel: parsed.multiBricksLevel ?? 0,
           pickupRadiusLevel: parsed.pickupRadiusLevel ?? 0,
           fasterSpawnsLevel: parsed.fasterSpawnsLevel ?? 0,
@@ -168,6 +183,10 @@ async function saveWorldState() {
   const activeEntity = findBuildingStateEntity(ws.currentBuildingKey)
   if (!activeEntity) return
   const bs = BuildingState.get(activeEntity)
+  const buildingLevels: Record<string, number> = {}
+  for (const [_, s] of engine.getEntitiesWith(BuildingState)) {
+    buildingLevels[s.buildingKey] = s.level
+  }
   const data: SerializedWorldState = {
     brickCount: ws.brickCount,
     currentBuildingKey: ws.currentBuildingKey,
@@ -181,6 +200,7 @@ async function saveWorldState() {
       collapseStartProgress: bs.collapseStartProgress,
       completedTime: bs.completedTime,
     },
+    buildingLevels,
     savedAt: Date.now(),
   }
   try {
@@ -203,6 +223,16 @@ async function restoreWorldState() {
   ws.currentBuildingKey = saved.currentBuildingKey
   nextBrickId = Math.max(nextBrickId, saved.nextBrickId)
   for (const a of saved.contributors) currentRoundContributors.add(a)
+
+  // Restore per-building levels (older saves may not have this field).
+  if (saved.buildingLevels) {
+    for (const [entity, s] of engine.getEntitiesWith(BuildingState)) {
+      const persisted = saved.buildingLevels[s.buildingKey]
+      if (typeof persisted === 'number') {
+        BuildingState.getMutable(entity).level = persisted
+      }
+    }
+  }
 
   const activeEntity = findBuildingStateEntity(saved.currentBuildingKey)
   if (activeEntity) {
@@ -378,6 +408,7 @@ function attachBuildingState(cfg: BuildingConfig) {
   const stateEntity = engine.addEntity()
   BuildingState.create(stateEntity, {
     buildingKey: cfg.entityName,
+    level: 0,
     riseProgress: 0,
     currentLean: 0,
     collapsing: false,
@@ -717,6 +748,12 @@ function presentPlayerAddresses(): Set<string> {
   return present
 }
 
+async function handleBuildingCollapse(cfg: BuildingConfig) {
+  console.log('[SERVER] Building collapsed:', cfg.entityName, '— hard repick')
+  const nextKey = await pickNextBuildingKey(cfg.entityName)
+  await transitionToBuilding(nextKey, cfg)
+}
+
 async function handleBuildingCompletion(cfg: BuildingConfig) {
   const present = presentPlayerAddresses()
   const eligible = [...currentRoundContributors].filter((a) => present.has(a))
@@ -732,37 +769,94 @@ async function handleBuildingCompletion(cfg: BuildingConfig) {
     void saveProfile(address, profile)
   }
 
-  console.log(
-    '[SERVER] Building completed:',
-    cfg.entityName,
-    '— eligible contributors:',
-    eligible.length
-  )
+  // Bump this building's persistent difficulty level.
+  const completedEntity = findBuildingStateEntity(cfg.entityName)
+  if (completedEntity) {
+    const s = BuildingState.getMutable(completedEntity)
+    s.level = s.level + 1
+    console.log(
+      '[SERVER] Building completed:',
+      cfg.entityName,
+      '— Lv',
+      s.level,
+      '— eligible contributors:',
+      eligible.length
+    )
+  }
 
   const nextKey = await pickNextBuildingKey(cfg.entityName)
   await transitionToBuilding(nextKey, cfg)
 }
 
+// What buildings does this player WANT next? For now: the highest tier
+// they currently have unlocked (completing it advances unlockedTier).
+// Future: also any building that grants a pending unlock for them.
+function wantedBuildingsFor(profile: PlayerProfile): BuildingConfig[] {
+  let highest: BuildingConfig | null = null
+  for (const cfg of BUILDING_CONFIGS) {
+    if (cfg.tier > profile.unlockedTier) continue
+    if (!highest || cfg.tier > highest.tier) highest = cfg
+  }
+  return highest ? [highest] : []
+}
+
 async function pickNextBuildingKey(currentKey: string): Promise<string> {
-  // Each in-scene player contributes 1 weight per building they have unlocked.
-  // Exclude the just-completed building.
-  const weights = new Map<string, number>()
+  type Entry = { address: string; profile: PlayerProfile }
+  const players: Entry[] = []
   for (const [_, identity] of engine.getEntitiesWith(PlayerIdentityData)) {
-    const profile = await ensureProfile(identity.address.toLowerCase())
-    for (const cfg of BUILDING_CONFIGS) {
-      if (cfg.tier > profile.unlockedTier) continue
-      if (cfg.entityName === currentKey) continue
-      weights.set(cfg.entityName, (weights.get(cfg.entityName) ?? 0) + 1)
+    const address = identity.address.toLowerCase()
+    players.push({ address, profile: await ensureProfile(address) })
+  }
+
+  // Base pool: every building up to the highest tier any present player has
+  // unlocked. Excludes the just-completed building.
+  const maxTier = players.reduce(
+    (m, p) => Math.max(m, p.profile.unlockedTier),
+    1
+  )
+  const weights = new Map<string, number>()
+  for (const cfg of BUILDING_CONFIGS) {
+    if (cfg.tier > maxTier) continue
+    if (cfg.entityName === currentKey) continue
+    weights.set(cfg.entityName, 1)
+  }
+  if (weights.size === 0) return currentKey
+
+  // Each player adds (pity + 1) weight to each building in their wanted pool.
+  // Buildings outside the base pool (e.g., the just-completed one) are skipped.
+  for (const p of players) {
+    const pool = wantedBuildingsFor(p.profile)
+    const contribution = p.profile.pity + 1
+    for (const cfg of pool) {
+      if (!weights.has(cfg.entityName)) continue
+      weights.set(
+        cfg.entityName,
+        weights.get(cfg.entityName)! + contribution
+      )
     }
   }
-  if (weights.size === 0) return currentKey // only the current is unlocked → repeat
+
   const total = [...weights.values()].reduce((a, b) => a + b, 0)
   let r = Math.random() * total
+  let chosen: string | null = null
   for (const [key, w] of weights) {
     r -= w
-    if (r <= 0) return key
+    if (r <= 0) {
+      chosen = key
+      break
+    }
   }
-  return [...weights.keys()][0]
+  if (!chosen) chosen = [...weights.keys()][0]
+
+  // Update pity per player based on whether their pool got what they wanted.
+  for (const p of players) {
+    const pool = wantedBuildingsFor(p.profile)
+    const inPool = pool.some((c) => c.entityName === chosen)
+    p.profile.pity = inPool ? 0 : p.profile.pity + 1
+    void saveProfile(p.address, p.profile)
+  }
+
+  return chosen
 }
 
 async function transitionToBuilding(nextKey: string, completedCfg: BuildingConfig) {
@@ -813,8 +907,9 @@ function incrementBrickCount(amount: number, straightenBonus = 0) {
     if (!cfg) continue
     const state = BuildingState.getMutable(entity)
     if (state.collapsing) continue
-    if (ws.brickCount >= cfg.bricksRequired) continue
-    const totalStraighten = cfg.brickStraightenDeg + straightenBonus
+    if (ws.brickCount >= bricksRequiredFor(cfg, state.level)) continue
+    const totalStraighten =
+      brickStraightenFor(cfg, state.level) + straightenBonus
     state.currentLean = Math.max(0, state.currentLean - totalStraighten)
   }
 }
@@ -856,21 +951,22 @@ function serverBuildingSystem(dt: number) {
         cfg.collapseHoldDuration +
         cfg.collapseSinkDuration
       if (state.collapseTime > tSink) {
-        ws.brickCount = Math.floor(ws.brickCount * cfg.collapseRetentionRatio)
-        state.currentLean = 0
-        state.riseProgress = 0
-        state.collapsing = false
-        state.collapseTime = 0
-        state.completedTime = 0
+        // Hard repick: pick a fresh building and transition. Building level
+        // on the failed one stays put (no progression credit, no penalty).
+        // brickCount and per-building state are reset inside transitionToBuilding.
+        void handleBuildingCollapse(cfg)
+        // Guard against re-fire while the async transition is in flight.
+        state.collapseTime = -999999
       }
       continue
     }
 
-    const target = Math.min(1, ws.brickCount / cfg.bricksRequired)
+    const required = bricksRequiredFor(cfg, state.level)
+    const target = Math.min(1, ws.brickCount / required)
     const riseEasing = 1 - Math.exp(-dt * 1.5)
     state.riseProgress += (target - state.riseProgress) * riseEasing
 
-    const completed = ws.brickCount >= cfg.bricksRequired
+    const completed = ws.brickCount >= required
     if (completed) {
       const settleEasing = 1 - Math.exp(-dt * 0.8)
       state.currentLean +=

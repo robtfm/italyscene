@@ -9,7 +9,11 @@ import { Quaternion } from '@dcl/sdk/math'
 import { isStateSyncronized } from '@dcl/sdk/network'
 import { Brick, BuildingState, WorldState } from '../shared/schemas'
 import { room } from '../shared/messages'
-import { BUILDING_CONFIGS, BuildingConfig } from '../shared/buildings'
+import {
+  BUILDING_CONFIGS,
+  BuildingConfig,
+  bricksRequiredFor,
+} from '../shared/buildings'
 import { pickupRadius } from '../shared/upgrades'
 
 const handledBricks = new Set<Entity>()
@@ -326,6 +330,7 @@ export function getActiveBuildingState(): {
   collapsing: boolean
   completedTime: number
   bricksRequired: number
+  level: number
 } | null {
   const activeKey = getCurrentBuildingKey()
   if (!activeKey) return null
@@ -339,7 +344,8 @@ export function getActiveBuildingState(): {
       displayLean: localDisplayLean.get(entity) ?? state.currentLean,
       collapsing: state.collapsing,
       completedTime: state.completedTime,
-      bricksRequired: cfg.bricksRequired,
+      bricksRequired: bricksRequiredFor(cfg, state.level),
+      level: state.level,
     }
   }
   return null

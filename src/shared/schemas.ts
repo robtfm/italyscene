@@ -15,6 +15,9 @@ export const WorldState = engine.defineComponent('italyscene:WorldState', {
 
 export const BuildingState = engine.defineComponent('italyscene:BuildingState', {
   buildingKey: Schemas.String,
+  // Per-building progression: increments on each successful completion.
+  // Higher level → more bricks required, less straighten per brick.
+  level: Schemas.Int,
   riseProgress: Schemas.Float,
   currentLean: Schemas.Float,
   collapsing: Schemas.Boolean,

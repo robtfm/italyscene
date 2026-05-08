@@ -9,7 +9,6 @@ export type BuildingConfig = {
   leanSign: 1 | -1
   collapseAngleDeg: number
   brickStraightenDeg: number
-  collapseRetentionRatio: number
   buriedY: number
   fullY: number
   buriedScaleY: number
@@ -34,7 +33,6 @@ export const PISA: BuildingConfig = {
   leanSign: -1,
   collapseAngleDeg: 30,
   brickStraightenDeg: 4,
-  collapseRetentionRatio: 0.3,
   buriedY: -0.5,
   fullY: 9,
   buriedScaleY: 3,
@@ -59,7 +57,6 @@ export const COLOSSEUM: BuildingConfig = {
   leanSign: 1,
   collapseAngleDeg: 25,
   brickStraightenDeg: 3,
-  collapseRetentionRatio: 0.4,
   buriedY: -0.5,
   fullY: 4,
   buriedScaleY: 2,
@@ -74,3 +71,13 @@ export const COLOSSEUM: BuildingConfig = {
 }
 
 export const BUILDING_CONFIGS: BuildingConfig[] = [PISA, COLOSSEUM]
+
+// Per-building difficulty scaling. Each completion bumps the building's
+// level by 1; higher levels demand more bricks and grant less straighten
+// per brick — but the same upgrades still apply.
+export function bricksRequiredFor(cfg: BuildingConfig, level: number): number {
+  return Math.round(cfg.bricksRequired * (1 + 1.5 * Math.max(0, level)))
+}
+export function brickStraightenFor(cfg: BuildingConfig, level: number): number {
+  return cfg.brickStraightenDeg / (1 + 0.1 * Math.max(0, level))
+}

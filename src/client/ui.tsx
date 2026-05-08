@@ -217,17 +217,22 @@ const uiComponent = () => (
 
 function topCenter() {
   const active = getActiveBuildingState()
+  // level field starts at 0 (first attempt) and increments per completion;
+  // display 1-indexed so "Lv 1" is the fresh starting point.
+  const titleWithLevel = active
+    ? `${active.displayName} Lv ${active.level + 1}`
+    : null
   const completionLine =
     active === null
       ? 'Building: …'
       : active.collapsing
-      ? `${active.displayName}: COLLAPSING!!!`
+      ? `${titleWithLevel}: COLLAPSING!!!`
       : active.completedTime > 0
-      ? `${active.displayName}: COMPLETE — next in ${Math.max(
+      ? `${titleWithLevel}: COMPLETE — next in ${Math.max(
           0,
           COMPLETION_CELEBRATION_S - active.completedTime
         ).toFixed(1)}s`
-      : `${active.displayName}: ${Math.round(
+      : `${titleWithLevel}: ${Math.round(
           active.riseProgress * 100
         )}% (${active.bricksRequired} bricks)`
 
