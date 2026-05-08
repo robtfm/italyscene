@@ -20,9 +20,9 @@ import {
   contributionPersonalBonus,
   contributionTeacherBonus,
   harmonicSum,
+  isAtMax,
   leanRateScale,
   levelUpCost,
-  MAX_MULTI_BRICK_LEVEL,
   plumbLinePersonalBonus,
   plumbLineTeacherBonus,
   rollBrickValue,
@@ -492,21 +492,30 @@ function createBrickEntity(x: number, y: number, z: number, value: number) {
   const entity = engine.addEntity()
   const brickId = nextBrickId++
   Brick.create(entity, { brickId, value, spawnedAt: Date.now() })
+  // Visual height grows with stack value but caps so towers stay clickable.
+  const visualY = Math.min(3, 0.5 * value)
   Transform.create(entity, {
     position: { x, y, z },
-    scale: { x: 0.8, y: 0.5 * value, z: 1.2 },
+    scale: { x: 0.8, y: visualY, z: 1.2 },
     rotation: { x: 0, y: Math.random() * Math.PI * 2, z: 0, w: 1 },
   })
   MeshRenderer.setBox(entity)
   MeshCollider.setBox(entity, ColliderLayer.CL_POINTER)
   const palette =
-    value === 3
+    value >= 8
+      ? {
+          // jewel — bright emerald-violet for huge stacks
+          albedo: Color4.fromHexString('#9f4cffff'),
+          emissive: Color4.fromHexString('#5a1ec0ff'),
+          emissiveIntensity: 2.0,
+        }
+      : value >= 4
       ? {
           albedo: Color4.fromHexString('#e6b94dff'),
           emissive: Color4.fromHexString('#b07a14ff'),
           emissiveIntensity: 1.4,
         }
-      : value === 2
+      : value >= 2
       ? {
           albedo: Color4.fromHexString('#d96a30ff'),
           emissive: Color4.fromHexString('#993315ff'),
@@ -598,7 +607,7 @@ async function handleLevelUp(rawAddress: string, key: UpgradeKey) {
   const address = rawAddress.toLowerCase()
   const profile = await ensureProfile(address)
   const current = profile[key]
-  if (current >= MAX_MULTI_BRICK_LEVEL) return
+  if (isAtMax(key, current)) return
   const cost = levelUpCost(current)
   const available = profile.lifetimeContributions - profile.bricksSpent
   if (available < cost) return

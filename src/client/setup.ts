@@ -116,11 +116,7 @@ function brickHandlerSystem() {
     const brick = Brick.getOrNull(entity)
     if (!brick) continue
     const hoverText =
-      brick.value === 3
-        ? 'Collect 3 bricks'
-        : brick.value === 2
-        ? 'Collect 2 bricks'
-        : 'Collect brick'
+      brick.value <= 1 ? 'Collect brick' : `Collect ${brick.value} bricks`
     pointerEventsSystem.onPointerDown(
       {
         entity,

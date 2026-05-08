@@ -1,95 +1,93 @@
 // Tunables — feel can be adjusted without rewiring.
+//
+// All upgrades scale linearly (or asymptotically where 0/100% bounds matter)
+// and have no max level — costs stay exponential so growth tapers naturally.
+// Pickup Radius is the one exception: a hard cap keeps clicking distance from
+// trivialising the game.
 
-export const MAX_LEVEL = 10
-const REWARD_CAP = 1.5
+export const PICKUP_RADIUS_MAX_LEVEL = 10
 
-// Generic level→fraction-of-max-effect curve. Saturates at L10, capped at 1.5×.
-export function levelToFraction(level: number): number {
-  if (level <= 0) return 0
-  const f = Math.log(level + 1) / Math.log(MAX_LEVEL + 1)
-  return Math.min(REWARD_CAP, f)
+const UPGRADE_MAX_LEVELS: Record<string, number> = {
+  pickupRadiusLevel: PICKUP_RADIUS_MAX_LEVEL,
 }
 
-// Multi-bricks (world-wide).
-export const MAX_DOUBLE_CHANCE = 0.25
-export const MAX_TRIPLE_CHANCE = 0.04
-
-export function multiBricksChances(effectiveLevel: number): {
-  double: number
-  triple: number
-} {
-  const f = levelToFraction(effectiveLevel)
-  return { double: MAX_DOUBLE_CHANCE * f, triple: MAX_TRIPLE_CHANCE * f }
+export function maxLevelFor(upgradeKey: string): number {
+  return UPGRADE_MAX_LEVELS[upgradeKey] ?? Infinity
 }
 
-// Pickup radius (personal). Base 4m → up to 4 + 4 = 8m at L10.
-export const PICKUP_RADIUS_BASE = 4
-export const PICKUP_RADIUS_BONUS_MAX = 4
+export function isAtMax(upgradeKey: string, level: number): boolean {
+  return level >= maxLevelFor(upgradeKey)
+}
 
+// Brick Bonus (world-wide). Each spawn's stack size is uniform in
+//   [1, floor((L+1) - eps)+1]
+// driven by a single rng draw. At integer L, value ∈ [1, L+1]; at fractional
+// L the upper bucket exists with reduced probability, giving smooth scaling.
+export function maxBrickStack(effectiveLevel: number): number {
+  if (effectiveLevel <= 0) return 1
+  // Largest value rollBrickValue can return: 1 + floor(span - eps).
+  const span = effectiveLevel + 1
+  return Number.isInteger(span) ? span : 1 + Math.floor(span)
+}
+
+export function rollBrickValue(
+  effectiveLevel: number,
+  rng: () => number = Math.random
+): number {
+  const span = Math.max(1, effectiveLevel + 1)
+  return 1 + Math.floor(rng() * span)
+}
+
+// Builder's Reach (personal). 1m + level, hard-capped at level 10 (radius 11m).
+export const PICKUP_RADIUS_BASE = 1
 export function pickupRadius(personalLevel: number): number {
-  return PICKUP_RADIUS_BASE + PICKUP_RADIUS_BONUS_MAX * levelToFraction(personalLevel)
+  return PICKUP_RADIUS_BASE + Math.min(personalLevel, PICKUP_RADIUS_MAX_LEVEL)
 }
 
-// Faster spawns (world-wide). Multiplies the spawn interval by 1/(1 + bonus).
-// At L10 effective: interval is halved (~2.5s vs 5s base).
+// Supply Lines (world-wide). Asymptotic: interval × 1/(1 + 0.15*L). L=10 →
+// 0.40×, L=50 → 0.12×, never reaches 0.
 export function spawnIntervalScale(effectiveLevel: number): number {
-  return 1 / (1 + 1.0 * levelToFraction(effectiveLevel))
+  return 1 / (1 + 0.15 * Math.max(0, effectiveLevel))
 }
 
-// Lean dampener (world-wide). Multiplies the lean accumulation rate.
-// At L10 effective: rate cut to 30% of base.
+// Scaffolding (world-wide). Asymptotic lean-rate scaler with the same shape.
 export function leanRateScale(effectiveLevel: number): number {
-  return Math.max(0.05, 1 - 0.7 * levelToFraction(effectiveLevel))
+  return 1 / (1 + 0.15 * Math.max(0, effectiveLevel))
 }
 
-// Sturdy foundation (world-wide). Adds degrees to the per-building collapse
-// threshold. At L10 effective: +12° (so Pisa: 30° → 42°).
-export const STURDY_BONUS_MAX_DEG = 12
+// Opus Romano (world-wide). +1° collapse threshold per effective level.
 export function sturdyAngleBonus(effectiveLevel: number): number {
-  return STURDY_BONUS_MAX_DEG * levelToFraction(effectiveLevel)
+  return Math.max(0, effectiveLevel)
 }
 
-// Plumb Line (personal). Each brick you collect straightens the building lean
-// by an extra N degrees, on top of cfg.brickStraightenDeg.
-export const PLUMB_PERSONAL_MAX_DEG = 6
+// Plumb Line (personal). +0.5° straighten per personal level.
 export function plumbLinePersonalBonus(personalLevel: number): number {
-  return PLUMB_PERSONAL_MAX_DEG * levelToFraction(personalLevel)
+  return Math.max(0, personalLevel) * 0.5
 }
 
-// Plumb Line Teacher (world-wide). Smaller flat bonus added on top of every
-// brick collection in the room.
-export const PLUMB_TEACHER_MAX_DEG = 3
+// Plumb Maestro (world-wide). +0.2° straighten on every brick collected.
 export function plumbLineTeacherBonus(effectiveLevel: number): number {
-  return PLUMB_TEACHER_MAX_DEG * levelToFraction(effectiveLevel)
+  return Math.max(0, effectiveLevel) * 0.2
 }
 
-// Generous Contribution (personal). Multiplies the value of bricks YOU collect
-// when applied to building progress (and lifetime currency).
-// At L10 personal: +50%.
-export const GENEROUS_PERSONAL_MAX = 0.5
+// Artful Contribution (personal). +5% building progress per personal level.
 export function contributionPersonalBonus(personalLevel: number): number {
-  return GENEROUS_PERSONAL_MAX * levelToFraction(personalLevel)
+  return Math.max(0, personalLevel) * 0.05
 }
 
-// Generous Teacher (world-wide). Smaller multiplier bonus applied to EVERY
-// brick collected, scaled by world effective level. At L10 effective: +20%.
-export const GENEROUS_TEACHER_MAX = 0.2
+// Artful Maestro (world-wide). +2% per effective level on every brick.
 export function contributionTeacherBonus(effectiveLevel: number): number {
-  return GENEROUS_TEACHER_MAX * levelToFraction(effectiveLevel)
+  return Math.max(0, effectiveLevel) * 0.02
 }
 
-// Stockpile (world-wide). Increases the active brick cap.
-// base × (1 + 3 × fraction). 8 → 32 at L10 effective.
+// Stockpile (world-wide). cap × (1 + 0.2*L). L=10 → 3×, L=50 → 11×.
 export function brickCapMultiplier(effectiveLevel: number): number {
-  return 1 + 3 * levelToFraction(effectiveLevel)
+  return 1 + 0.2 * Math.max(0, effectiveLevel)
 }
 
-// Tithe (personal). Multiplier bonus on the lifetime-contribution credit
-// (the upgrade currency) — does NOT affect building progress.
-// At L10 personal: +50%.
-export const TITHE_PERSONAL_MAX = 0.5
+// Padrone's Cut (personal). +5% upgrade currency per personal level.
 export function titheBonus(personalLevel: number): number {
-  return TITHE_PERSONAL_MAX * levelToFraction(personalLevel)
+  return Math.max(0, personalLevel) * 0.05
 }
 
 // Stack contributions sorted high→low. Position 0 keeps full weight (solo
@@ -105,19 +103,8 @@ export function harmonicSum(levels: number[]): number {
   return sum
 }
 
-// Cost of advancing FROM level (level) TO level (level+1). Exponential.
+// Cost of advancing FROM level (level) TO level (level+1). Exponential —
+// dominates the linear effect curves so each next purchase costs ~50% more.
 export function levelUpCost(currentLevel: number): number {
-  if (currentLevel >= MAX_LEVEL) return Infinity
   return Math.round(5 * Math.pow(1.5, currentLevel))
-}
-
-// Backwards-compat alias used by older callers.
-export const MAX_MULTI_BRICK_LEVEL = MAX_LEVEL
-
-export function rollBrickValue(effectiveLevel: number, rng: () => number = Math.random): number {
-  const { double, triple } = multiBricksChances(effectiveLevel)
-  const r = rng()
-  if (r < triple) return 3
-  if (r < triple + double) return 2
-  return 1
 }
