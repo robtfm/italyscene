@@ -52,13 +52,22 @@ const currentRoundContributors = new Set<string>()
 
 type PlayerProfile = {
   lifetimeContributions: number
-  completionsByBuilding: Record<string, number>
-  unlockedTier: number
+  // Linear unlock counter scanning the (building × level) grid row-by-row.
+  //   0 → only Pisa Lv 1, 1 → +Colosseum Lv 1, ...
+  //   N (== BUILDING_CONFIGS.length) → +Pisa Lv 2, etc.
+  // The "highest unlocked level" is floor(availableBuildings / N); the next
+  // building to unlock is tier (availableBuildings % N) + 1 at that level + 1.
+  availableBuildings: number
+  // Highest level personally beaten of each building (0 = never). Skill /
+  // unlock gates check this map (e.g., maxBuildingLevel.Colosseum >= 4).
+  // Increments by 1 (capped at completedLevel) each time the player
+  // participates in beating that building at or above their current max.
+  maxBuildingLevel: Record<string, number>
   bricksSpent: number
-  // Pity counter: increments every time a building gets picked that's NOT in
-  // this player's wanted pool. Resets to 0 on a hit. Their per-building
-  // contribution to the weighted pick is (pity + 1), so unsatisfied players
-  // gradually pull the choice toward what they want.
+  // Pity counter: +1 per pick where the rolled building's level wouldn't
+  // advance this player's availableBuildings (or unlock something they want).
+  // Resets to 0 when it would. Their per-building contribution to the
+  // weighted pick is (pity + 1).
   pity: number
   multiBricksLevel: number
   pickupRadiusLevel: number
@@ -102,8 +111,8 @@ const greetedEntities = new Set<Entity>()
 function defaultProfile(): PlayerProfile {
   return {
     lifetimeContributions: 0,
-    completionsByBuilding: {},
-    unlockedTier: 1,
+    availableBuildings: 0,
+    maxBuildingLevel: {},
     bricksSpent: 0,
     pity: 0,
     multiBricksLevel: 0,
@@ -126,10 +135,14 @@ async function loadProfile(address: string): Promise<PlayerProfile> {
     if (raw) {
       const parsed = JSON.parse(raw)
       if (typeof parsed?.lifetimeContributions === 'number') {
+        // Migrate legacy unlockedTier (1-indexed, monotonic) to availableBuildings:
+        // unlockedTier=1 → 0 (just Pisa), unlockedTier=2 → 1 (+Colosseum), etc.
+        const legacyAvailable =
+          typeof parsed.unlockedTier === 'number' ? parsed.unlockedTier - 1 : 0
         return {
           lifetimeContributions: parsed.lifetimeContributions,
-          completionsByBuilding: parsed.completionsByBuilding ?? {},
-          unlockedTier: parsed.unlockedTier ?? 1,
+          availableBuildings: parsed.availableBuildings ?? legacyAvailable,
+          maxBuildingLevel: parsed.maxBuildingLevel ?? {},
           bricksSpent: parsed.bricksSpent ?? 0,
           pity: parsed.pity ?? 0,
           multiBricksLevel: parsed.multiBricksLevel ?? 0,
@@ -758,19 +771,32 @@ async function handleBuildingCompletion(cfg: BuildingConfig) {
   const present = presentPlayerAddresses()
   const eligible = [...currentRoundContributors].filter((a) => present.has(a))
 
-  // Credit eligible players' profiles
+  // Level just beaten — read BEFORE we bump the building's persistent level.
+  const completedEntity = findBuildingStateEntity(cfg.entityName)
+  const completedLevel = completedEntity
+    ? BuildingState.get(completedEntity).level
+    : 0
+
+  // Credit eligible players' profiles. Both progressions cap at +1 per
+  // completion: a low-tier player who joins a high-level party advances by
+  // one rung in each track, not all the way to the completed level —
+  // preserves the granularity for skill / building unlocks gated on
+  // per-building max levels (e.g., "beat Colosseum L4+").
   for (const address of eligible) {
     const profile = await ensureProfile(address)
-    profile.completionsByBuilding[cfg.entityName] =
-      (profile.completionsByBuilding[cfg.entityName] ?? 0) + 1
-    if (cfg.tier + 1 > profile.unlockedTier) {
-      profile.unlockedTier = cfg.tier + 1
+
+    const currentMax = profile.maxBuildingLevel[cfg.entityName] ?? 0
+    if (completedLevel >= currentMax) {
+      profile.maxBuildingLevel[cfg.entityName] = currentMax + 1
     }
+    if (completedLevel >= highestUnlockedLevel(profile)) {
+      profile.availableBuildings += 1
+    }
+
     void saveProfile(address, profile)
   }
 
   // Bump this building's persistent difficulty level.
-  const completedEntity = findBuildingStateEntity(cfg.entityName)
   if (completedEntity) {
     const s = BuildingState.getMutable(completedEntity)
     s.level = s.level + 1
@@ -788,16 +814,26 @@ async function handleBuildingCompletion(cfg: BuildingConfig) {
   await transitionToBuilding(nextKey, cfg)
 }
 
-// What buildings does this player WANT next? For now: the highest tier
-// they currently have unlocked (completing it advances unlockedTier).
-// Future: also any building that grants a pending unlock for them.
+// Highest LEVEL the player currently has unlocked (0-indexed: 0 = first).
+// Beating any building at this level or above advances availableBuildings.
+function highestUnlockedLevel(profile: PlayerProfile): number {
+  return Math.floor(profile.availableBuildings / BUILDING_CONFIGS.length)
+}
+
+// How many BUILDINGS this player has unlocked at all (for base-pool sizing).
+function unlockedBuildingCount(profile: PlayerProfile): number {
+  return Math.min(BUILDING_CONFIGS.length, profile.availableBuildings + 1)
+}
+
+// What buildings does this player WANT next? Currently: the next building in
+// the linear chain — tier (available % N) + 1 — beating which would advance
+// availableBuildings. Future: also buildings whose level matches a pending
+// skill / building unlock requirement they're missing.
 function wantedBuildingsFor(profile: PlayerProfile): BuildingConfig[] {
-  let highest: BuildingConfig | null = null
-  for (const cfg of BUILDING_CONFIGS) {
-    if (cfg.tier > profile.unlockedTier) continue
-    if (!highest || cfg.tier > highest.tier) highest = cfg
-  }
-  return highest ? [highest] : []
+  const nextTier =
+    (profile.availableBuildings % BUILDING_CONFIGS.length) + 1
+  const next = BUILDING_CONFIGS.find((c) => c.tier === nextTier)
+  return next ? [next] : []
 }
 
 async function pickNextBuildingKey(currentKey: string): Promise<string> {
@@ -808,25 +844,31 @@ async function pickNextBuildingKey(currentKey: string): Promise<string> {
     players.push({ address, profile: await ensureProfile(address) })
   }
 
-  // Base pool: every building up to the highest tier any present player has
-  // unlocked. Excludes the just-completed building.
-  const maxTier = players.reduce(
-    (m, p) => Math.max(m, p.profile.unlockedTier),
+  // Base pool: every building up to the highest count any present player has
+  // unlocked. Each entry seeded with 1/n (n = unlocked count) so the base
+  // sums to a unit weight regardless of pool size. Excludes the just-completed
+  // building.
+  const maxBuildingsUnlocked = players.reduce(
+    (m, p) => Math.max(m, unlockedBuildingCount(p.profile)),
     1
   )
+  const baseWeight = 1 / maxBuildingsUnlocked
   const weights = new Map<string, number>()
   for (const cfg of BUILDING_CONFIGS) {
-    if (cfg.tier > maxTier) continue
+    if (cfg.tier > maxBuildingsUnlocked) continue
     if (cfg.entityName === currentKey) continue
-    weights.set(cfg.entityName, 1)
+    weights.set(cfg.entityName, baseWeight)
   }
   if (weights.size === 0) return currentKey
 
-  // Each player adds (pity + 1) weight to each building in their wanted pool.
-  // Buildings outside the base pool (e.g., the just-completed one) are skipped.
+  // Each player adds (1 + pity) / pool-size to each building in their pool.
+  // This normalizes contributions across players regardless of how big their
+  // pools are; the +1 ensures a satisfied player still contributes a full
+  // unit-weight to their pool (so they aren't invisible).
   for (const p of players) {
     const pool = wantedBuildingsFor(p.profile)
-    const contribution = p.profile.pity + 1
+    if (pool.length === 0) continue
+    const contribution = (1 + p.profile.pity) / pool.length
     for (const cfg of pool) {
       if (!weights.has(cfg.entityName)) continue
       weights.set(
@@ -848,11 +890,18 @@ async function pickNextBuildingKey(currentKey: string): Promise<string> {
   }
   if (!chosen) chosen = [...weights.keys()][0]
 
-  // Update pity per player based on whether their pool got what they wanted.
+  // Pity update: reset for any player whose progression would be advanced by
+  // the chosen building (i.e., its current level >= their highest-unlocked
+  // level), otherwise +1. The "advance" rule covers both wanted-pool hits and
+  // any building rolled at-or-above the player's frontier level — both flavors
+  // count as forward progress.
+  const chosenEntity = findBuildingStateEntity(chosen)
+  const chosenLevel = chosenEntity
+    ? BuildingState.get(chosenEntity).level
+    : 0
   for (const p of players) {
-    const pool = wantedBuildingsFor(p.profile)
-    const inPool = pool.some((c) => c.entityName === chosen)
-    p.profile.pity = inPool ? 0 : p.profile.pity + 1
+    const required = highestUnlockedLevel(p.profile)
+    p.profile.pity = chosenLevel >= required ? 0 : p.profile.pity + 1
     void saveProfile(p.address, p.profile)
   }
 
