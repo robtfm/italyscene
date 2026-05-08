@@ -120,14 +120,18 @@ export function sturdyAngleBonus(effectiveLevel: number): number {
   return Math.max(0, effectiveLevel)
 }
 
-// Plumb Line (personal). +0.5° straighten per personal level.
+// Plumb Line (personal). Multiplicative on the building's per-brick
+// straighten — +10% per personal level. Stays coupled to building design;
+// can't outrun the per-building level scaling.
 export function plumbLinePersonalBonus(personalLevel: number): number {
-  return Math.max(0, personalLevel) * 0.5
+  return Math.max(0, personalLevel) * 0.1
 }
 
-// Plumb Maestro (world-wide). +0.2° straighten on every brick collected.
+// Plumb Maestro (world-wide). Multiplicative bonus on every brick collected
+// — +4% per effective level. Smaller than the personal version since it
+// applies to all players.
 export function plumbLineTeacherBonus(effectiveLevel: number): number {
-  return Math.max(0, effectiveLevel) * 0.2
+  return Math.max(0, effectiveLevel) * 0.04
 }
 
 // Artful Contribution (personal). +5% building progress per personal level.

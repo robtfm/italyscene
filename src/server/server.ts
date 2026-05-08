@@ -626,18 +626,22 @@ async function applyBrickAward(playerAddress: string, baseValue: number) {
   // lifetime currency. Otherwise it snowballs into self-funding upgrades.
   const buildingValue = Math.max(baseValue, Math.round(baseValue * valueMult))
 
-  const personalStraighten = plumbLinePersonalBonus(profile.plumbLineLevel)
-  const teacherStraighten = ws
+  const personalStraightenFrac = plumbLinePersonalBonus(profile.plumbLineLevel)
+  const teacherStraightenFrac = ws
     ? plumbLineTeacherBonus(ws.effectivePlumbTeacherLevel)
     : 0
-  const straightenBonus = personalStraighten + teacherStraighten
+  // Plumb Line / Maestro multiply the building's per-brick straighten
+  // (instead of adding flat degrees) so they stay coupled to the per-building
+  // scaling and can't outrun a difficult building's design.
+  const straightenMultiplier =
+    1 + personalStraightenFrac + teacherStraightenFrac
 
   // Tithe (personal) multiplies only the upgrade-currency credit, not the
   // building progress.
   const tithe = titheBonus(profile.titheLevel)
   const creditValue = Math.max(baseValue, Math.round(baseValue * (1 + tithe)))
 
-  incrementBrickCount(buildingValue, straightenBonus)
+  incrementBrickCount(buildingValue, straightenMultiplier)
   creditPlayer(playerAddress, creditValue)
 }
 
@@ -978,7 +982,7 @@ async function transitionToBuilding(nextKey: string, completedCfg: BuildingConfi
   console.log('[SERVER] Transitioning to', nextKey)
 }
 
-function incrementBrickCount(amount: number, straightenBonus = 0) {
+function incrementBrickCount(amount: number, straightenMultiplier = 1) {
   if (!worldStateEntity) return
   const ws = WorldState.getMutable(worldStateEntity)
   ws.brickCount += amount
@@ -990,7 +994,7 @@ function incrementBrickCount(amount: number, straightenBonus = 0) {
     if (state.collapsing) continue
     if (ws.brickCount >= bricksRequiredFor(cfg, state.level)) continue
     const totalStraighten =
-      brickStraightenFor(cfg, state.level) + straightenBonus
+      brickStraightenFor(cfg, state.level) * straightenMultiplier
     state.currentLean = Math.max(0, state.currentLean - totalStraighten)
   }
 }

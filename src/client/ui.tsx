@@ -335,14 +335,14 @@ const UPGRADE_INFO: Record<string, UpgradeInfo> = {
   plumbLine: {
     title: 'Plumb Line',
     description:
-      'Each brick YOU collect straightens lean by a few extra degrees. Personal — only your level affects your bricks.',
-    formatEffect: (L) => `+${plumbLinePersonalBonus(L).toFixed(1)}°`,
+      "Each brick YOU collect straightens lean by an extra %, multiplied on top of the building's per-brick straighten. Personal — only your level affects your bricks.",
+    formatEffect: (L) => `+${(plumbLinePersonalBonus(L) * 100).toFixed(0)}%`,
   },
   plumbTeacher: {
     title: 'Plumb Maestro',
     description:
-      'A small extra straighten bonus added on top of EVERY brick collection in the room. World-wide; harmonically stacked.',
-    formatEffect: (L) => `+${plumbLineTeacherBonus(L).toFixed(1)}°`,
+      "A small percentage bonus on every brick's straighten, room-wide. World-wide; harmonically stacked.",
+    formatEffect: (L) => `+${(plumbLineTeacherBonus(L) * 100).toFixed(0)}%`,
   },
   generous: {
     title: 'Artful Contribution',
@@ -784,7 +784,7 @@ function skillTreeModal() {
                 level: stats.plumbLineLevel,
                 nowLevel: stats.plumbLineLevel,
                 nextLevel: stats.plumbLineLevel + 1,
-                sub: `Personal. Your bricks straighten +${plumbLinePersonalBonus(stats.plumbLineLevel).toFixed(1)}°.`,
+                sub: `Personal. Your bricks straighten +${(plumbLinePersonalBonus(stats.plumbLineLevel) * 100).toFixed(0)}%.`,
                 cost: levelUpCost(stats.plumbLineLevel, 'plumbLineLevel'),
                 atMax: isAtEffectiveMax('plumbLineLevel', stats.plumbLineLevel, stats.maxBuildingLevel),
                 canBuy: can('plumbLineLevel', stats.plumbLineLevel),
@@ -796,7 +796,7 @@ function skillTreeModal() {
                 level: stats.plumbTeacherLevel,
                 nowLevel: getEffectivePlumbTeacherLevel(),
                 nextLevel: stats.nextEffectivePlumbTeacherLevel,
-                sub: `World-wide. Eff ${getEffectivePlumbTeacherLevel().toFixed(2)}, +${plumbLineTeacherBonus(getEffectivePlumbTeacherLevel()).toFixed(1)}° to all bricks.`,
+                sub: `World-wide. Eff ${getEffectivePlumbTeacherLevel().toFixed(2)}, +${(plumbLineTeacherBonus(getEffectivePlumbTeacherLevel()) * 100).toFixed(0)}% to all bricks.`,
                 cost: levelUpCost(stats.plumbTeacherLevel, 'plumbTeacherLevel'),
                 atMax: isAtEffectiveMax('plumbTeacherLevel', stats.plumbTeacherLevel, stats.maxBuildingLevel),
                 canBuy: can('plumbTeacherLevel', stats.plumbTeacherLevel),
