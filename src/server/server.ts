@@ -7,9 +7,10 @@ import {
   MeshRenderer,
   MeshCollider,
   Material,
+  Tween,
   ColliderLayer,
 } from '@dcl/sdk/ecs'
-import { Color4 } from '@dcl/sdk/math'
+import { Color4, Quaternion } from '@dcl/sdk/math'
 import { syncEntity } from '@dcl/sdk/network'
 import { Storage } from '@dcl/sdk/server'
 import { Brick, BuildingState, WorldState } from '../shared/schemas'
@@ -533,12 +534,15 @@ function createBrickEntity(x: number, y: number, z: number, value: number) {
     emissiveColor: palette.emissive,
     emissiveIntensity: palette.emissiveIntensity,
   })
+  // direction sets axis (Y); speed is degrees/sec. 60°/s = full revolution per 6s.
+  Tween.setRotateContinuous(entity, Quaternion.fromEulerDegrees(0, 1, 0), 60)
   syncEntity(entity, [
     Transform.componentId,
     Brick.componentId,
     MeshRenderer.componentId,
     Material.componentId,
     MeshCollider.componentId,
+    Tween.componentId,
   ])
 }
 

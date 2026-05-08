@@ -106,6 +106,30 @@ export function initClient() {
   })
   engine.addSystem(brickHandlerSystem)
   engine.addSystem(buildingVisualSystem)
+  engine.addSystem(brickAnimSystem)
+}
+
+// Rotation runs server-side via Tween.setRotateContinuous (synced to clients).
+// Bob stays client-only since it's pure visual flair and avoids syncing a
+// position oscillation 60Hz.
+const BRICK_BOB_FREQ_HZ = 0.6
+const BRICK_BOB_AMP = 0.18
+
+const brickAnim = new Map<Entity, { baseY: number; phase: number }>()
+
+function brickAnimSystem(dt: number) {
+  for (const [entity] of engine.getEntitiesWith(Brick)) {
+    const t = Transform.getMutableOrNull(entity)
+    if (!t) continue
+    let st = brickAnim.get(entity)
+    if (!st) {
+      st = { baseY: t.position.y, phase: Math.random() * Math.PI * 2 }
+      brickAnim.set(entity, st)
+    }
+    st.phase =
+      (st.phase + dt * BRICK_BOB_FREQ_HZ * Math.PI * 2) % (Math.PI * 2)
+    t.position.y = st.baseY + Math.sin(st.phase) * BRICK_BOB_AMP
+  }
 }
 
 function brickHandlerSystem() {
