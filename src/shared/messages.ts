@@ -3,6 +3,14 @@ import { registerMessages } from '@dcl/sdk/network'
 
 export const Messages = {
   collectBrick: Schemas.Map({ brickId: Schemas.Int }),
+  // Server broadcasts to all clients on each collection. Drives the visual
+  // flight effect; no game-state side effect (state is already changed).
+  brickCollected: Schemas.Map({
+    x: Schemas.Float,
+    y: Schemas.Float,
+    z: Schemas.Float,
+    value: Schemas.Int,
+  }),
   debugAddBrick: Schemas.Map({ ts: Schemas.Int }),
   contributionUpdate: Schemas.Map({ count: Schemas.Int }),
   myStatsUpdate: Schemas.Map({

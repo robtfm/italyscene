@@ -1,9 +1,9 @@
 import {
   engine,
   Entity,
+  InputAction,
   Transform,
   pointerEventsSystem,
-  InputAction,
 } from '@dcl/sdk/ecs'
 import { Quaternion } from '@dcl/sdk/math'
 import { isStateSyncronized } from '@dcl/sdk/network'
@@ -15,6 +15,7 @@ import {
   bricksRequiredFor,
 } from '../shared/buildings'
 import { spawnPlaceholderBuildings } from '../shared/building-spawn'
+import { setupFlyingBricks } from './flying-bricks'
 import { pickupRadius } from '../shared/upgrades'
 
 const handledBricks = new Set<Entity>()
@@ -88,6 +89,7 @@ export function getMyStats(): MyStats {
 export function initClient() {
   console.log('[CLIENT] initClient')
   spawnPlaceholderBuildings()
+  setupFlyingBricks()
   room.onMessage('myStatsUpdate', (data) => {
     const prevRadiusLevel = myStats.pickupRadiusLevel
     myStats = {
@@ -114,11 +116,9 @@ export function initClient() {
       maxBuildingLevel: parseMaxBuildingLevel(data.maxBuildingLevelJson),
     }
     if (data.pickupRadiusLevel !== prevRadiusLevel) {
-      // Pull existing brick handlers and let brickHandlerSystem re-register
-      // with the new radius next tick. removeOnPointerDown clears the prior
-      // callback so the new one doesn't stack on top.
+      // Re-register all brick proximity handlers with the new radius.
       for (const entity of handledBricks) {
-        pointerEventsSystem.removeOnPointerDown(entity)
+        pointerEventsSystem.removeOnProximityEnter(entity)
       }
       handledBricks.clear()
     }
@@ -158,14 +158,14 @@ function brickHandlerSystem() {
     if (handledBricks.has(entity)) continue
     const brick = Brick.getOrNull(entity)
     if (!brick) continue
-    const hoverText =
-      brick.value <= 1 ? 'Collect brick' : `Collect ${brick.value} bricks`
-    pointerEventsSystem.onPointerDown(
+    pointerEventsSystem.onProximityEnter(
       {
         entity,
         opts: {
-          button: InputAction.IA_PRIMARY,
-          hoverText,
+          // Unity renderer requires an explicit button on the PointerEvents
+          // entry even for proximity-enter events. Bevy defaults to IA_POINTER
+          // when omitted, so this is for Unity compatibility.
+          button: InputAction.IA_POINTER,
           maxPlayerDistance: radius,
         },
       },

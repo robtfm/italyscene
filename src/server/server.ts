@@ -606,8 +606,18 @@ async function handleCollectBrick(brickId: number, playerAddress: string) {
   for (const [entity, b] of engine.getEntitiesWith(Brick)) {
     if (b.brickId !== brickId) continue
     const value = b.value || 1
+    const pos = Transform.getOrNull(entity)?.position
     await applyBrickAward(playerAddress, value)
     engine.removeEntity(entity)
+    if (pos) {
+      // Broadcast visual-only effect to all clients (no `to` = all peers).
+      room.send('brickCollected', {
+        x: pos.x,
+        y: pos.y,
+        z: pos.z,
+        value,
+      })
+    }
     return
   }
   console.log('[SERVER] collectBrick: no entity with brickId', brickId)
