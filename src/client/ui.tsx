@@ -292,7 +292,7 @@ type UpgradeInfo = {
 }
 const UPGRADE_INFO: Record<string, UpgradeInfo> = {
   multiBricks: {
-    title: 'Multi-bricks',
+    title: 'Brick Bonus',
     description:
       'Bricks may spawn in stacks. World-wide — combines harmonically across active players.',
     formatEffect: (L) => {
@@ -301,25 +301,25 @@ const UPGRADE_INFO: Record<string, UpgradeInfo> = {
     },
   },
   pickupRadius: {
-    title: 'Pickup radius',
+    title: "Builder's Reach",
     description:
       'Click bricks from further away. Personal — only your own level affects your reach.',
     formatEffect: (L) => `${pickupRadius(L).toFixed(1)} m`,
   },
   fasterSpawns: {
-    title: 'Faster spawns',
+    title: 'Supply Lines',
     description:
       'Bricks spawn more often. World-wide; harmonically stacked across active players.',
     formatEffect: (L) => `× ${spawnIntervalScale(L).toFixed(2)}`,
   },
   leanDampener: {
-    title: 'Lean dampener',
+    title: 'Scaffolding',
     description:
       'Buildings lean over more slowly. World-wide; harmonically stacked across active players.',
     formatEffect: (L) => `× ${leanRateScale(L).toFixed(2)}`,
   },
   sturdyFoundation: {
-    title: 'Sturdy foundation',
+    title: 'Opus Romano',
     description:
       'Buildings tolerate more lean before collapsing. World-wide; harmonically stacked.',
     formatEffect: (L) => `+${sturdyAngleBonus(L).toFixed(1)}°`,
@@ -331,20 +331,20 @@ const UPGRADE_INFO: Record<string, UpgradeInfo> = {
     formatEffect: (L) => `+${plumbLinePersonalBonus(L).toFixed(1)}°`,
   },
   plumbTeacher: {
-    title: 'Plumb Line Teacher',
+    title: 'Plumb Maestro',
     description:
       'A small extra straighten bonus added on top of EVERY brick collection in the room. World-wide; harmonically stacked.',
     formatEffect: (L) => `+${plumbLineTeacherBonus(L).toFixed(1)}°`,
   },
   generous: {
-    title: 'Generous Contribution',
+    title: 'Artful Contribution',
     description:
       'Each brick YOU collect counts as more toward the building. Personal — only boosts the building, not your currency.',
     formatEffect: (L) =>
       `+${(contributionPersonalBonus(L) * 100).toFixed(0)}%`,
   },
   generousTeacher: {
-    title: 'Generous Teacher',
+    title: 'Artful Maestro',
     description:
       'A small extra value bonus on EVERY brick collection in the room. World-wide; harmonically stacked.',
     formatEffect: (L) =>
@@ -357,7 +357,7 @@ const UPGRADE_INFO: Record<string, UpgradeInfo> = {
     formatEffect: (L) => `× ${brickCapMultiplier(L).toFixed(2)}`,
   },
   tithe: {
-    title: 'Tithe',
+    title: "Padrone's Cut",
     description:
       "Keep a bigger cut of every brick you collect for upgrade currency. Doesn't help the building — only your spend power.",
     formatEffect: (L) => `+${(titheBonus(L) * 100).toFixed(0)}%`,
