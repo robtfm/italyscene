@@ -21,6 +21,7 @@ import {
   bricksRequiredFor,
   brickStraightenFor,
 } from '../shared/buildings'
+import { spawnPlaceholderBuildings } from '../shared/building-spawn'
 import {
   brickCapMultiplier,
   contributionPersonalBonus,
@@ -352,6 +353,8 @@ function playerJoinSystem() {
 
 export async function initServer() {
   console.log('[SERVER] initServer')
+
+  spawnPlaceholderBuildings()
 
   worldStateEntity = engine.addEntity()
   WorldState.create(worldStateEntity, {

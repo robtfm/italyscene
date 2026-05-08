@@ -14,6 +14,7 @@ import {
   BuildingConfig,
   bricksRequiredFor,
 } from '../shared/buildings'
+import { spawnPlaceholderBuildings } from '../shared/building-spawn'
 import { pickupRadius } from '../shared/upgrades'
 
 const handledBricks = new Set<Entity>()
@@ -74,6 +75,7 @@ export function getMyStats(): MyStats {
 
 export function initClient() {
   console.log('[CLIENT] initClient')
+  spawnPlaceholderBuildings()
   room.onMessage('myStatsUpdate', (data) => {
     const prevRadiusLevel = myStats.pickupRadiusLevel
     myStats = {
