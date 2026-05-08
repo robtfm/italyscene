@@ -134,14 +134,14 @@ export function plumbLineTeacherBonus(effectiveLevel: number): number {
   return Math.max(0, effectiveLevel) * 0.04
 }
 
-// Artful Contribution (personal). +5% building progress per personal level.
+// Artful Contribution (personal). +10% building progress per personal level.
 export function contributionPersonalBonus(personalLevel: number): number {
-  return Math.max(0, personalLevel) * 0.05
+  return Math.max(0, personalLevel) * 0.10
 }
 
-// Artful Maestro (world-wide). +2% per effective level on every brick.
+// Artful Maestro (world-wide). +4% per effective level on every brick.
 export function contributionTeacherBonus(effectiveLevel: number): number {
-  return Math.max(0, effectiveLevel) * 0.02
+  return Math.max(0, effectiveLevel) * 0.04
 }
 
 // Stockpile (world-wide). cap × (1 + 0.2*L). L=10 → 3×, L=50 → 11×.
@@ -149,9 +149,12 @@ export function brickCapMultiplier(effectiveLevel: number): number {
   return 1 + 0.2 * Math.max(0, effectiveLevel)
 }
 
-// Padrone's Cut (personal). +5% upgrade currency per personal level.
+// Padrone's Cut (personal). Exponential — bonus = 1.5^L − 1, so L1 = +50%,
+// L5 = +659%, L10 = +5666%. Costs grow at 3.0^L, so the upgrade is still
+// not free money — but each level meaningfully scales your earnings.
 export function titheBonus(personalLevel: number): number {
-  return Math.max(0, personalLevel) * 0.05
+  if (personalLevel <= 0) return 0
+  return Math.pow(1.5, personalLevel) - 1
 }
 
 // Stack contributions sorted high→low. Position 0 keeps full weight (solo
