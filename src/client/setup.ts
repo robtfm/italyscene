@@ -41,6 +41,7 @@ export type MyStats = {
   nextEffectivePlumbTeacherLevel: number
   nextEffectiveGenerousTeacherLevel: number
   nextEffectiveStockpileLevel: number
+  maxBuildingLevel: Record<string, number>
 }
 let myStats: MyStats = {
   lifetimeContributions: 0,
@@ -63,6 +64,17 @@ let myStats: MyStats = {
   nextEffectivePlumbTeacherLevel: 0,
   nextEffectiveGenerousTeacherLevel: 0,
   nextEffectiveStockpileLevel: 0,
+  maxBuildingLevel: {},
+}
+
+function parseMaxBuildingLevel(raw: string): Record<string, number> {
+  if (!raw) return {}
+  try {
+    const parsed = JSON.parse(raw)
+    return parsed && typeof parsed === 'object' ? parsed : {}
+  } catch {
+    return {}
+  }
 }
 
 export function getMyContribution(): number {
@@ -99,6 +111,7 @@ export function initClient() {
       nextEffectivePlumbTeacherLevel: data.nextEffectivePlumbTeacherLevel,
       nextEffectiveGenerousTeacherLevel: data.nextEffectiveGenerousTeacherLevel,
       nextEffectiveStockpileLevel: data.nextEffectiveStockpileLevel,
+      maxBuildingLevel: parseMaxBuildingLevel(data.maxBuildingLevelJson),
     }
     if (data.pickupRadiusLevel !== prevRadiusLevel) {
       // Pull existing brick handlers and let brickHandlerSystem re-register

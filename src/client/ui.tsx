@@ -24,6 +24,8 @@ import {
   brickCapMultiplier,
   contributionPersonalBonus,
   contributionTeacherBonus,
+  gateBlockingFor,
+  isAtEffectiveMax,
   isAtMax,
   leanRateScale,
   levelUpCost,
@@ -35,6 +37,7 @@ import {
   sturdyAngleBonus,
   titheBonus,
 } from '../shared/upgrades'
+import { BUILDING_CONFIGS } from '../shared/buildings'
 
 const COMPLETION_CELEBRATION_S = 10
 
@@ -73,8 +76,8 @@ function currentlyBuyable(): Set<string> {
   const out = new Set<string>()
   for (const u of ALL_UPGRADES) {
     const lvl = u.getter(stats)
-    if (isAtMax(u.key, lvl)) continue
-    if (available >= levelUpCost(lvl)) out.add(buyableKey(u.key, lvl + 1))
+    if (isAtEffectiveMax(u.key, lvl, stats.maxBuildingLevel)) continue
+    if (available >= levelUpCost(lvl, u.key)) out.add(buyableKey(u.key, lvl + 1))
   }
   return out
 }
@@ -654,7 +657,17 @@ function skillTreeModal() {
   const available = stats.lifetimeContributions - stats.bricksSpent
 
   const can = (key: string, level: number) =>
-    !isAtMax(key, level) && available >= levelUpCost(level)
+    !isAtEffectiveMax(key, level, stats.maxBuildingLevel) &&
+    available >= levelUpCost(level, key)
+  const lockReasonFor = (key: string, level: number): string | undefined => {
+    if (isAtMax(key, level)) return undefined // hard cap → "MAX"
+    const gate = gateBlockingFor(key, level, stats.maxBuildingLevel)
+    if (!gate) return undefined
+    const cfg = BUILDING_CONFIGS.find((c) => c.entityName === gate.building)
+    const name = cfg?.displayName ?? gate.building
+    // gate.required is already the 1-indexed Lv (matches the building banner).
+    return `Beat ${name} Lv ${gate.required}`
+  }
 
   return (
     <UiEntity
@@ -707,9 +720,10 @@ function skillTreeModal() {
                 nowLevel: mbEff,
                 nextLevel: stats.nextEffectiveMultiBricksLevel,
                 sub: `World-wide. Effective ${mbEff.toFixed(2)}.`,
-                cost: levelUpCost(stats.multiBricksLevel),
-                atMax: isAtMax('multiBricksLevel', stats.multiBricksLevel),
+                cost: levelUpCost(stats.multiBricksLevel, 'multiBricksLevel'),
+                atMax: isAtEffectiveMax('multiBricksLevel', stats.multiBricksLevel, stats.maxBuildingLevel),
                 canBuy: can('multiBricksLevel', stats.multiBricksLevel),
+                lockReason: lockReasonFor('multiBricksLevel', stats.multiBricksLevel),
                 onBuy: () =>
                   room.send('levelUpMultiBricks', { ts: Date.now() }),
               })}
@@ -719,9 +733,10 @@ function skillTreeModal() {
                 nowLevel: stats.pickupRadiusLevel,
                 nextLevel: stats.pickupRadiusLevel + 1,
                 sub: `Personal. Reach ${pickupRadius(stats.pickupRadiusLevel).toFixed(1)} m.`,
-                cost: levelUpCost(stats.pickupRadiusLevel),
-                atMax: isAtMax('pickupRadiusLevel', stats.pickupRadiusLevel),
+                cost: levelUpCost(stats.pickupRadiusLevel, 'pickupRadiusLevel'),
+                atMax: isAtEffectiveMax('pickupRadiusLevel', stats.pickupRadiusLevel, stats.maxBuildingLevel),
                 canBuy: can('pickupRadiusLevel', stats.pickupRadiusLevel),
+                lockReason: lockReasonFor('pickupRadiusLevel', stats.pickupRadiusLevel),
                 onBuy: () =>
                   room.send('levelUpPickupRadius', { ts: Date.now() }),
               })}
@@ -731,9 +746,10 @@ function skillTreeModal() {
                 nowLevel: fsEff,
                 nextLevel: stats.nextEffectiveFasterSpawnsLevel,
                 sub: `World-wide. Effective ${fsEff.toFixed(2)}, interval × ${spawnIntervalScale(fsEff).toFixed(2)}.`,
-                cost: levelUpCost(stats.fasterSpawnsLevel),
-                atMax: isAtMax('fasterSpawnsLevel', stats.fasterSpawnsLevel),
+                cost: levelUpCost(stats.fasterSpawnsLevel, 'fasterSpawnsLevel'),
+                atMax: isAtEffectiveMax('fasterSpawnsLevel', stats.fasterSpawnsLevel, stats.maxBuildingLevel),
                 canBuy: can('fasterSpawnsLevel', stats.fasterSpawnsLevel),
+                lockReason: lockReasonFor('fasterSpawnsLevel', stats.fasterSpawnsLevel),
                 onBuy: () =>
                   room.send('levelUpFasterSpawns', { ts: Date.now() }),
               })}
@@ -743,9 +759,10 @@ function skillTreeModal() {
                 nowLevel: ldEff,
                 nextLevel: stats.nextEffectiveLeanDampenerLevel,
                 sub: `World-wide. Effective ${ldEff.toFixed(2)}, lean rate × ${leanRateScale(ldEff).toFixed(2)}.`,
-                cost: levelUpCost(stats.leanDampenerLevel),
-                atMax: isAtMax('leanDampenerLevel', stats.leanDampenerLevel),
+                cost: levelUpCost(stats.leanDampenerLevel, 'leanDampenerLevel'),
+                atMax: isAtEffectiveMax('leanDampenerLevel', stats.leanDampenerLevel, stats.maxBuildingLevel),
                 canBuy: can('leanDampenerLevel', stats.leanDampenerLevel),
+                lockReason: lockReasonFor('leanDampenerLevel', stats.leanDampenerLevel),
                 onBuy: () =>
                   room.send('levelUpLeanDampener', { ts: Date.now() }),
               })}
@@ -755,9 +772,10 @@ function skillTreeModal() {
                 nowLevel: sfEff,
                 nextLevel: stats.nextEffectiveSturdyFoundationLevel,
                 sub: `World-wide. Effective ${sfEff.toFixed(2)}, threshold +${sturdyAngleBonus(sfEff).toFixed(1)}°.`,
-                cost: levelUpCost(stats.sturdyFoundationLevel),
-                atMax: isAtMax('sturdyFoundationLevel', stats.sturdyFoundationLevel),
+                cost: levelUpCost(stats.sturdyFoundationLevel, 'sturdyFoundationLevel'),
+                atMax: isAtEffectiveMax('sturdyFoundationLevel', stats.sturdyFoundationLevel, stats.maxBuildingLevel),
                 canBuy: can('sturdyFoundationLevel', stats.sturdyFoundationLevel),
+                lockReason: lockReasonFor('sturdyFoundationLevel', stats.sturdyFoundationLevel),
                 onBuy: () =>
                   room.send('levelUpSturdyFoundation', { ts: Date.now() }),
               })}
@@ -767,9 +785,10 @@ function skillTreeModal() {
                 nowLevel: stats.plumbLineLevel,
                 nextLevel: stats.plumbLineLevel + 1,
                 sub: `Personal. Your bricks straighten +${plumbLinePersonalBonus(stats.plumbLineLevel).toFixed(1)}°.`,
-                cost: levelUpCost(stats.plumbLineLevel),
-                atMax: isAtMax('plumbLineLevel', stats.plumbLineLevel),
+                cost: levelUpCost(stats.plumbLineLevel, 'plumbLineLevel'),
+                atMax: isAtEffectiveMax('plumbLineLevel', stats.plumbLineLevel, stats.maxBuildingLevel),
                 canBuy: can('plumbLineLevel', stats.plumbLineLevel),
+                lockReason: lockReasonFor('plumbLineLevel', stats.plumbLineLevel),
                 onBuy: () => room.send('levelUpPlumbLine', { ts: Date.now() }),
               })}
               {skillRow({
@@ -778,9 +797,10 @@ function skillTreeModal() {
                 nowLevel: getEffectivePlumbTeacherLevel(),
                 nextLevel: stats.nextEffectivePlumbTeacherLevel,
                 sub: `World-wide. Eff ${getEffectivePlumbTeacherLevel().toFixed(2)}, +${plumbLineTeacherBonus(getEffectivePlumbTeacherLevel()).toFixed(1)}° to all bricks.`,
-                cost: levelUpCost(stats.plumbTeacherLevel),
-                atMax: isAtMax('plumbTeacherLevel', stats.plumbTeacherLevel),
+                cost: levelUpCost(stats.plumbTeacherLevel, 'plumbTeacherLevel'),
+                atMax: isAtEffectiveMax('plumbTeacherLevel', stats.plumbTeacherLevel, stats.maxBuildingLevel),
                 canBuy: can('plumbTeacherLevel', stats.plumbTeacherLevel),
+                lockReason: lockReasonFor('plumbTeacherLevel', stats.plumbTeacherLevel),
                 onBuy: () =>
                   room.send('levelUpPlumbTeacher', { ts: Date.now() }),
               })}
@@ -790,9 +810,10 @@ function skillTreeModal() {
                 nowLevel: stats.generousLevel,
                 nextLevel: stats.generousLevel + 1,
                 sub: `Personal. Your bricks worth +${(contributionPersonalBonus(stats.generousLevel) * 100).toFixed(0)}%.`,
-                cost: levelUpCost(stats.generousLevel),
-                atMax: isAtMax('generousLevel', stats.generousLevel),
+                cost: levelUpCost(stats.generousLevel, 'generousLevel'),
+                atMax: isAtEffectiveMax('generousLevel', stats.generousLevel, stats.maxBuildingLevel),
                 canBuy: can('generousLevel', stats.generousLevel),
+                lockReason: lockReasonFor('generousLevel', stats.generousLevel),
                 onBuy: () => room.send('levelUpGenerous', { ts: Date.now() }),
               })}
               {skillRow({
@@ -801,9 +822,10 @@ function skillTreeModal() {
                 nowLevel: getEffectiveGenerousTeacherLevel(),
                 nextLevel: stats.nextEffectiveGenerousTeacherLevel,
                 sub: `World-wide. Eff ${getEffectiveGenerousTeacherLevel().toFixed(2)}, +${(contributionTeacherBonus(getEffectiveGenerousTeacherLevel()) * 100).toFixed(0)}% to all bricks.`,
-                cost: levelUpCost(stats.generousTeacherLevel),
-                atMax: isAtMax('generousTeacherLevel', stats.generousTeacherLevel),
+                cost: levelUpCost(stats.generousTeacherLevel, 'generousTeacherLevel'),
+                atMax: isAtEffectiveMax('generousTeacherLevel', stats.generousTeacherLevel, stats.maxBuildingLevel),
                 canBuy: can('generousTeacherLevel', stats.generousTeacherLevel),
+                lockReason: lockReasonFor('generousTeacherLevel', stats.generousTeacherLevel),
                 onBuy: () =>
                   room.send('levelUpGenerousTeacher', { ts: Date.now() }),
               })}
@@ -813,9 +835,10 @@ function skillTreeModal() {
                 nowLevel: getEffectiveStockpileLevel(),
                 nextLevel: stats.nextEffectiveStockpileLevel,
                 sub: `World-wide. Eff ${getEffectiveStockpileLevel().toFixed(2)}, brick cap × ${brickCapMultiplier(getEffectiveStockpileLevel()).toFixed(2)}.`,
-                cost: levelUpCost(stats.stockpileLevel),
-                atMax: isAtMax('stockpileLevel', stats.stockpileLevel),
+                cost: levelUpCost(stats.stockpileLevel, 'stockpileLevel'),
+                atMax: isAtEffectiveMax('stockpileLevel', stats.stockpileLevel, stats.maxBuildingLevel),
                 canBuy: can('stockpileLevel', stats.stockpileLevel),
+                lockReason: lockReasonFor('stockpileLevel', stats.stockpileLevel),
                 onBuy: () => room.send('levelUpStockpile', { ts: Date.now() }),
               })}
               {skillRow({
@@ -824,9 +847,10 @@ function skillTreeModal() {
                 nowLevel: stats.titheLevel,
                 nextLevel: stats.titheLevel + 1,
                 sub: `Personal. +${(titheBonus(stats.titheLevel) * 100).toFixed(0)}% upgrade currency on every brick you collect.`,
-                cost: levelUpCost(stats.titheLevel),
-                atMax: isAtMax('titheLevel', stats.titheLevel),
+                cost: levelUpCost(stats.titheLevel, 'titheLevel'),
+                atMax: isAtEffectiveMax('titheLevel', stats.titheLevel, stats.maxBuildingLevel),
                 canBuy: can('titheLevel', stats.titheLevel),
+                lockReason: lockReasonFor('titheLevel', stats.titheLevel),
                 onBuy: () => room.send('levelUpTithe', { ts: Date.now() }),
               })}
 
@@ -862,6 +886,9 @@ function skillRow(opts: {
   cost: number
   atMax: boolean
   canBuy: boolean
+  // When set, the upgrade is gated by a building level; replaces the button
+  // label with "Beat <Building> Lv N" instead of "MAX" / cost text.
+  lockReason?: string
   onBuy: () => void
 }) {
   const tooltip = `${opts.title}\n\n${opts.description}`
@@ -918,7 +945,9 @@ function skillRow(opts: {
         }}
       >
         {roundedButton({
-          value: opts.atMax
+          value: opts.lockReason
+            ? opts.lockReason
+            : opts.atMax
             ? 'MAX'
             : opts.canBuy
             ? `Level up (${opts.cost})`

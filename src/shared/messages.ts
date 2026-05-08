@@ -28,6 +28,10 @@ export const Messages = {
     nextEffectivePlumbTeacherLevel: Schemas.Float,
     nextEffectiveGenerousTeacherLevel: Schemas.Float,
     nextEffectiveStockpileLevel: Schemas.Float,
+    // JSON-encoded Record<buildingKey, number> of this player's highest
+    // level personally beaten per building. Drives gate checks for
+    // upgrades that require a specific building at a specific level.
+    maxBuildingLevelJson: Schemas.String,
   }),
   levelUpMultiBricks: Schemas.Map({ ts: Schemas.Int }),
   levelUpPickupRadius: Schemas.Map({ ts: Schemas.Int }),

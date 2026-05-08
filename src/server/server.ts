@@ -26,8 +26,9 @@ import {
   brickCapMultiplier,
   contributionPersonalBonus,
   contributionTeacherBonus,
+  gateBlockingFor,
   harmonicSum,
-  isAtMax,
+  isAtEffectiveMax,
   leanRateScale,
   levelUpCost,
   plumbLinePersonalBonus,
@@ -36,6 +37,7 @@ import {
   spawnIntervalScale,
   sturdyAngleBonus,
   titheBonus,
+  UPGRADE_GATES,
 } from '../shared/upgrades'
 
 const SCENE_SIZE = 80
@@ -331,6 +333,7 @@ function sendMyStats(rawAddress: string, profile: PlayerProfile) {
       generousTeacherLevel: profile.generousTeacherLevel,
       stockpileLevel: profile.stockpileLevel,
       titheLevel: profile.titheLevel,
+      maxBuildingLevelJson: JSON.stringify(profile.maxBuildingLevel),
       ...next,
     },
     { to: [rawAddress] }
@@ -664,8 +667,8 @@ async function handleLevelUp(rawAddress: string, key: UpgradeKey) {
   const address = rawAddress.toLowerCase()
   const profile = await ensureProfile(address)
   const current = profile[key]
-  if (isAtMax(key, current)) return
-  const cost = levelUpCost(current)
+  if (isAtEffectiveMax(key, current, profile.maxBuildingLevel)) return
+  const cost = levelUpCost(current, key)
   const available = profile.lifetimeContributions - profile.bricksSpent
   if (available < cost) return
   profile.bricksSpent += cost
@@ -828,15 +831,41 @@ function unlockedBuildingCount(profile: PlayerProfile): number {
   return Math.min(BUILDING_CONFIGS.length, profile.availableBuildings + 1)
 }
 
-// What buildings does this player WANT next? Currently: the next building in
-// the linear chain — tier (available % N) + 1 — beating which would advance
-// availableBuildings. Future: also buildings whose level matches a pending
-// skill / building unlock requirement they're missing.
+// What buildings does this player WANT next?
+//   1. The next building in the linear chain (advances availableBuildings).
+//   2. Any building that gates an upgrade the player can afford to buy
+//      RIGHT NOW but is locked behind a max-level wall on a building they
+//      already have unlocked. Beating it will lift the gate by one level.
 function wantedBuildingsFor(profile: PlayerProfile): BuildingConfig[] {
+  const out: BuildingConfig[] = []
+
   const nextTier =
     (profile.availableBuildings % BUILDING_CONFIGS.length) + 1
-  const next = BUILDING_CONFIGS.find((c) => c.tier === nextTier)
-  return next ? [next] : []
+  const nextChain = BUILDING_CONFIGS.find((c) => c.tier === nextTier)
+  if (nextChain) out.push(nextChain)
+
+  const available = profile.lifetimeContributions - profile.bricksSpent
+  const unlockedCount = unlockedBuildingCount(profile)
+  for (const upgradeKey of Object.keys(UPGRADE_GATES)) {
+    const currentLevel = (profile as Record<string, unknown>)[
+      upgradeKey
+    ] as number | undefined
+    if (typeof currentLevel !== 'number') continue
+    if (available < levelUpCost(currentLevel, upgradeKey)) continue
+    const gate = gateBlockingFor(
+      upgradeKey,
+      currentLevel,
+      profile.maxBuildingLevel
+    )
+    if (!gate) continue
+    const cfg = BUILDING_CONFIGS.find((c) => c.entityName === gate.building)
+    if (!cfg) continue
+    if (cfg.tier > unlockedCount) continue
+    if (out.some((c) => c.entityName === cfg.entityName)) continue
+    out.push(cfg)
+  }
+
+  return out
 }
 
 async function pickNextBuildingKey(currentKey: string): Promise<string> {

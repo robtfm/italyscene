@@ -11,12 +11,70 @@ const UPGRADE_MAX_LEVELS: Record<string, number> = {
   pickupRadiusLevel: PICKUP_RADIUS_MAX_LEVEL,
 }
 
+// Each gated upgrade requires the player to have personally beaten the
+// listed building at level >= upgrade level. Multi-bricks is the only
+// always-available upgrade.
+export const UPGRADE_GATES: Record<string, string> = {
+  // Pisa
+  plumbTeacherLevel: 'TowerOfPisa',
+  // Colosseum
+  stockpileLevel: 'Colosseum',
+  // Duomo
+  generousTeacherLevel: 'Duomo',
+  generousLevel: 'Duomo',
+  // Pantheon
+  sturdyFoundationLevel: 'Pantheon',
+  plumbLineLevel: 'Pantheon',
+  // Trevi
+  fasterSpawnsLevel: 'Trevi',
+  pickupRadiusLevel: 'Trevi',
+  // Doge's Palace
+  leanDampenerLevel: 'DogesPalace',
+  titheLevel: 'DogesPalace',
+}
+
 export function maxLevelFor(upgradeKey: string): number {
   return UPGRADE_MAX_LEVELS[upgradeKey] ?? Infinity
 }
 
+// Effective max purchasable level for an upgrade given the player's
+// per-building max levels. min(hard cap, building gate's max).
+export function effectiveMaxLevel(
+  upgradeKey: string,
+  maxBuildingLevels: Record<string, number>
+): number {
+  const hardCap = maxLevelFor(upgradeKey)
+  const gateBuilding = UPGRADE_GATES[upgradeKey]
+  if (!gateBuilding) return hardCap
+  const gateMax = maxBuildingLevels[gateBuilding] ?? 0
+  return Math.min(hardCap, gateMax)
+}
+
 export function isAtMax(upgradeKey: string, level: number): boolean {
   return level >= maxLevelFor(upgradeKey)
+}
+
+export function isAtEffectiveMax(
+  upgradeKey: string,
+  level: number,
+  maxBuildingLevels: Record<string, number>
+): boolean {
+  return level >= effectiveMaxLevel(upgradeKey, maxBuildingLevels)
+}
+
+// Returns gate info if this upgrade is currently blocked by a building's
+// max level (and NOT by its hard cap). null otherwise.
+export function gateBlockingFor(
+  upgradeKey: string,
+  level: number,
+  maxBuildingLevels: Record<string, number>
+): { building: string; required: number } | null {
+  if (level >= maxLevelFor(upgradeKey)) return null // hard cap, not gate
+  const gateBuilding = UPGRADE_GATES[upgradeKey]
+  if (!gateBuilding) return null
+  const gateMax = maxBuildingLevels[gateBuilding] ?? 0
+  if (level < gateMax) return null // not gated yet
+  return { building: gateBuilding, required: level + 1 }
 }
 
 // Brick Bonus (world-wide). Each spawn's stack size is in [1, floor(L)+1],
@@ -105,8 +163,32 @@ export function harmonicSum(levels: number[]): number {
   return sum
 }
 
+// Per-upgrade cost multiplier — Tithe & Multi-bricks (force multipliers on
+// the brick economy itself) cost more; quality-of-life upgrades cost less.
+// Average is ~1.0× across the 11 upgrades.
+const UPGRADE_COST_MULTIPLIERS: Record<string, number> = {
+  titheLevel: 2.0, // pure currency multiplier
+  multiBricksLevel: 1.5, // boosts both progress + currency per stack
+  fasterSpawnsLevel: 1.2, // late-game enabler
+  plumbTeacherLevel: 1.0,
+  leanDampenerLevel: 0.9,
+  generousTeacherLevel: 0.8,
+  plumbLineLevel: 0.8,
+  stockpileLevel: 0.7,
+  sturdyFoundationLevel: 0.7,
+  generousLevel: 0.7,
+  pickupRadiusLevel: 0.6, // pure quality-of-life
+}
+
+const UPGRADE_COST_BASE = 100
+const UPGRADE_COST_GROWTH = 3.0
+
 // Cost of advancing FROM level (level) TO level (level+1). Exponential —
-// dominates the linear effect curves so each next purchase costs ~50% more.
-export function levelUpCost(currentLevel: number): number {
-  return Math.round(5 * Math.pow(1.5, currentLevel))
+// outpaces the linear bricks-per-building-level curve so late upgrades stay
+// expensive even after multi-bricks blooms the brick economy.
+export function levelUpCost(currentLevel: number, upgradeKey = ''): number {
+  const mult = UPGRADE_COST_MULTIPLIERS[upgradeKey] ?? 1.0
+  return Math.round(
+    UPGRADE_COST_BASE * mult * Math.pow(UPGRADE_COST_GROWTH, currentLevel)
+  )
 }
