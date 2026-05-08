@@ -19,6 +19,15 @@ export const Messages = {
     generousTeacherLevel: Schemas.Int,
     stockpileLevel: Schemas.Int,
     titheLevel: Schemas.Int,
+    // World-effective harmonic level if THIS player levels up the global skill
+    // by 1 (others held constant). Lets the client preview its impact.
+    nextEffectiveMultiBricksLevel: Schemas.Float,
+    nextEffectiveFasterSpawnsLevel: Schemas.Float,
+    nextEffectiveLeanDampenerLevel: Schemas.Float,
+    nextEffectiveSturdyFoundationLevel: Schemas.Float,
+    nextEffectivePlumbTeacherLevel: Schemas.Float,
+    nextEffectiveGenerousTeacherLevel: Schemas.Float,
+    nextEffectiveStockpileLevel: Schemas.Float,
   }),
   levelUpMultiBricks: Schemas.Map({ ts: Schemas.Int }),
   levelUpPickupRadius: Schemas.Map({ ts: Schemas.Int }),

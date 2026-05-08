@@ -244,7 +244,32 @@ function worldSaveSystem(dt: number) {
   void saveWorldState()
 }
 
+type NextEffectives = {
+  nextEffectiveMultiBricksLevel: number
+  nextEffectiveFasterSpawnsLevel: number
+  nextEffectiveLeanDampenerLevel: number
+  nextEffectiveSturdyFoundationLevel: number
+  nextEffectivePlumbTeacherLevel: number
+  nextEffectiveGenerousTeacherLevel: number
+  nextEffectiveStockpileLevel: number
+}
+const ZERO_NEXT_EFFECTIVES: NextEffectives = {
+  nextEffectiveMultiBricksLevel: 0,
+  nextEffectiveFasterSpawnsLevel: 0,
+  nextEffectiveLeanDampenerLevel: 0,
+  nextEffectiveSturdyFoundationLevel: 0,
+  nextEffectivePlumbTeacherLevel: 0,
+  nextEffectiveGenerousTeacherLevel: 0,
+  nextEffectiveStockpileLevel: 0,
+}
+// Cache of the most-recent personalised "next effective" per player.
+// Refreshed by recomputeEffectiveLevelAsync (~1Hz). sendMyStats reuses it so
+// brick-collect and level-up paths don't re-walk every present player.
+const lastNextEffectives = new Map<string, NextEffectives>()
+
 function sendMyStats(rawAddress: string, profile: PlayerProfile) {
+  const next =
+    lastNextEffectives.get(rawAddress.toLowerCase()) ?? ZERO_NEXT_EFFECTIVES
   room.send(
     'myStatsUpdate',
     {
@@ -261,6 +286,7 @@ function sendMyStats(rawAddress: string, profile: PlayerProfile) {
       generousTeacherLevel: profile.generousTeacherLevel,
       stockpileLevel: profile.stockpileLevel,
       titheLevel: profile.titheLevel,
+      ...next,
     },
     { to: [rawAddress] }
   )
@@ -599,24 +625,19 @@ function effectiveLevelSystem(dt: number) {
 
 async function recomputeEffectiveLevelAsync() {
   if (!worldStateEntity) return
-  const mb: number[] = []
-  const fs: number[] = []
-  const ld: number[] = []
-  const sf: number[] = []
-  const pt: number[] = []
-  const gt: number[] = []
-  const sp: number[] = []
+  type Entry = { rawAddress: string; profile: PlayerProfile }
+  const players: Entry[] = []
   for (const [_, identity] of engine.getEntitiesWith(PlayerIdentityData)) {
-    const address = identity.address.toLowerCase()
-    const profile = await ensureProfile(address)
-    mb.push(profile.multiBricksLevel)
-    fs.push(profile.fasterSpawnsLevel)
-    ld.push(profile.leanDampenerLevel)
-    sf.push(profile.sturdyFoundationLevel)
-    pt.push(profile.plumbTeacherLevel)
-    gt.push(profile.generousTeacherLevel)
-    sp.push(profile.stockpileLevel)
+    const profile = await ensureProfile(identity.address.toLowerCase())
+    players.push({ rawAddress: identity.address, profile })
   }
+  const mb = players.map((p) => p.profile.multiBricksLevel)
+  const fs = players.map((p) => p.profile.fasterSpawnsLevel)
+  const ld = players.map((p) => p.profile.leanDampenerLevel)
+  const sf = players.map((p) => p.profile.sturdyFoundationLevel)
+  const pt = players.map((p) => p.profile.plumbTeacherLevel)
+  const gt = players.map((p) => p.profile.generousTeacherLevel)
+  const sp = players.map((p) => p.profile.stockpileLevel)
   const ws = WorldState.getMutableOrNull(worldStateEntity)
   if (!ws) return
   const setIfChanged = (cur: number, next: number, apply: (v: number) => void) => {
@@ -643,6 +664,30 @@ async function recomputeEffectiveLevelAsync() {
   setIfChanged(ws.effectiveStockpileLevel, harmonicSum(sp), (v) => {
     ws.effectiveStockpileLevel = v
   })
+
+  // Per-player: compute "what would the harmonic effective be if I were +1?"
+  // for each global skill, then push a personalised myStats update so the
+  // client's skill-tree button hover can show an honest "Next" value.
+  for (let i = 0; i < players.length; i++) {
+    const p = players[i]
+    const next: NextEffectives = {
+      nextEffectiveMultiBricksLevel: harmonicSumWithBumped(mb, i),
+      nextEffectiveFasterSpawnsLevel: harmonicSumWithBumped(fs, i),
+      nextEffectiveLeanDampenerLevel: harmonicSumWithBumped(ld, i),
+      nextEffectiveSturdyFoundationLevel: harmonicSumWithBumped(sf, i),
+      nextEffectivePlumbTeacherLevel: harmonicSumWithBumped(pt, i),
+      nextEffectiveGenerousTeacherLevel: harmonicSumWithBumped(gt, i),
+      nextEffectiveStockpileLevel: harmonicSumWithBumped(sp, i),
+    }
+    lastNextEffectives.set(p.rawAddress.toLowerCase(), next)
+    sendMyStats(p.rawAddress, p.profile)
+  }
+}
+
+function harmonicSumWithBumped(levels: number[], i: number): number {
+  const copy = [...levels]
+  copy[i] = copy[i] + 1
+  return harmonicSum(copy)
 }
 
 function presentPlayerAddresses(): Set<string> {

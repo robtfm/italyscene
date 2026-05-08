@@ -29,6 +29,13 @@ export type MyStats = {
   generousTeacherLevel: number
   stockpileLevel: number
   titheLevel: number
+  nextEffectiveMultiBricksLevel: number
+  nextEffectiveFasterSpawnsLevel: number
+  nextEffectiveLeanDampenerLevel: number
+  nextEffectiveSturdyFoundationLevel: number
+  nextEffectivePlumbTeacherLevel: number
+  nextEffectiveGenerousTeacherLevel: number
+  nextEffectiveStockpileLevel: number
 }
 let myStats: MyStats = {
   lifetimeContributions: 0,
@@ -44,6 +51,13 @@ let myStats: MyStats = {
   generousTeacherLevel: 0,
   stockpileLevel: 0,
   titheLevel: 0,
+  nextEffectiveMultiBricksLevel: 0,
+  nextEffectiveFasterSpawnsLevel: 0,
+  nextEffectiveLeanDampenerLevel: 0,
+  nextEffectiveSturdyFoundationLevel: 0,
+  nextEffectivePlumbTeacherLevel: 0,
+  nextEffectiveGenerousTeacherLevel: 0,
+  nextEffectiveStockpileLevel: 0,
 }
 
 export function getMyContribution(): number {
@@ -72,6 +86,13 @@ export function initClient() {
       generousTeacherLevel: data.generousTeacherLevel,
       stockpileLevel: data.stockpileLevel,
       titheLevel: data.titheLevel,
+      nextEffectiveMultiBricksLevel: data.nextEffectiveMultiBricksLevel,
+      nextEffectiveFasterSpawnsLevel: data.nextEffectiveFasterSpawnsLevel,
+      nextEffectiveLeanDampenerLevel: data.nextEffectiveLeanDampenerLevel,
+      nextEffectiveSturdyFoundationLevel: data.nextEffectiveSturdyFoundationLevel,
+      nextEffectivePlumbTeacherLevel: data.nextEffectivePlumbTeacherLevel,
+      nextEffectiveGenerousTeacherLevel: data.nextEffectiveGenerousTeacherLevel,
+      nextEffectiveStockpileLevel: data.nextEffectiveStockpileLevel,
     }
     if (data.pickupRadiusLevel !== prevRadiusLevel) {
       // Pull existing brick handlers and let brickHandlerSystem re-register

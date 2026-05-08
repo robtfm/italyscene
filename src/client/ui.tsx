@@ -283,13 +283,96 @@ function topCenter() {
   )
 }
 
+const ICON_PLACEHOLDER = 'images/upgrades/placeholder.png'
+
+type UpgradeInfo = {
+  title: string
+  description: string
+  formatEffect: (level: number) => string
+}
+const UPGRADE_INFO: Record<string, UpgradeInfo> = {
+  multiBricks: {
+    title: 'Multi-bricks',
+    description:
+      'Bricks may spawn in stacks. World-wide — combines harmonically across active players.',
+    formatEffect: (L) => {
+      const c = multiBricksChances(L)
+      return `${(c.double * 100).toFixed(0)}% / ${(c.triple * 100).toFixed(0)}%`
+    },
+  },
+  pickupRadius: {
+    title: 'Pickup radius',
+    description:
+      'Click bricks from further away. Personal — only your own level affects your reach.',
+    formatEffect: (L) => `${pickupRadius(L).toFixed(1)} m`,
+  },
+  fasterSpawns: {
+    title: 'Faster spawns',
+    description:
+      'Bricks spawn more often. World-wide; harmonically stacked across active players.',
+    formatEffect: (L) => `× ${spawnIntervalScale(L).toFixed(2)}`,
+  },
+  leanDampener: {
+    title: 'Lean dampener',
+    description:
+      'Buildings lean over more slowly. World-wide; harmonically stacked across active players.',
+    formatEffect: (L) => `× ${leanRateScale(L).toFixed(2)}`,
+  },
+  sturdyFoundation: {
+    title: 'Sturdy foundation',
+    description:
+      'Buildings tolerate more lean before collapsing. World-wide; harmonically stacked.',
+    formatEffect: (L) => `+${sturdyAngleBonus(L).toFixed(1)}°`,
+  },
+  plumbLine: {
+    title: 'Plumb Line',
+    description:
+      'Each brick YOU collect straightens lean by a few extra degrees. Personal — only your level affects your bricks.',
+    formatEffect: (L) => `+${plumbLinePersonalBonus(L).toFixed(1)}°`,
+  },
+  plumbTeacher: {
+    title: 'Plumb Line Teacher',
+    description:
+      'A small extra straighten bonus added on top of EVERY brick collection in the room. World-wide; harmonically stacked.',
+    formatEffect: (L) => `+${plumbLineTeacherBonus(L).toFixed(1)}°`,
+  },
+  generous: {
+    title: 'Generous Contribution',
+    description:
+      'Each brick YOU collect counts as more toward the building. Personal — only boosts the building, not your currency.',
+    formatEffect: (L) =>
+      `+${(contributionPersonalBonus(L) * 100).toFixed(0)}%`,
+  },
+  generousTeacher: {
+    title: 'Generous Teacher',
+    description:
+      'A small extra value bonus on EVERY brick collection in the room. World-wide; harmonically stacked.',
+    formatEffect: (L) =>
+      `+${(contributionTeacherBonus(L) * 100).toFixed(0)}%`,
+  },
+  stockpile: {
+    title: 'Stockpile',
+    description:
+      'Raises the cap on how many bricks can be on the field at once. World-wide; harmonically stacked across active players.',
+    formatEffect: (L) => `× ${brickCapMultiplier(L).toFixed(2)}`,
+  },
+  tithe: {
+    title: 'Tithe',
+    description:
+      "Keep a bigger cut of every brick you collect for upgrade currency. Doesn't help the building — only your spend power.",
+    formatEffect: (L) => `+${(titheBonus(L) * 100).toFixed(0)}%`,
+  },
+}
+
 function rightEdge() {
   const stats = getMyStats()
   const mb = getEffectiveMultiBricksLevel()
   const fs = getEffectiveFasterSpawnsLevel()
   const ld = getEffectiveLeanDampenerLevel()
   const sf = getEffectiveSturdyFoundationLevel()
-  const chances = multiBricksChances(mb)
+  const pt = getEffectivePlumbTeacherLevel()
+  const gt = getEffectiveGenerousTeacherLevel()
+  const sk = getEffectiveStockpileLevel()
   return (
     <UiEntity
       uiTransform={{
@@ -299,166 +382,167 @@ function rightEdge() {
         flexDirection: 'column',
       }}
     >
+      {sectionHeader('Global')}
       {powerupCard({
-        index: 0,
-        title: 'Multi-bricks',
-        tooltip:
-          'Bricks may spawn in stacks. World-wide — combines harmonically across active players.',
-        lines: [
-          `Effective L${mb.toFixed(2)}`,
-          `Double: ${(chances.double * 100).toFixed(1)}%`,
-          `Triple: ${(chances.triple * 100).toFixed(1)}%`,
-          `Your level: ${stats.multiBricksLevel}`,
-        ],
+        ...UPGRADE_INFO.multiBricks,
+        valueText: UPGRADE_INFO.multiBricks.formatEffect(mb),
+        yourLevel: stats.multiBricksLevel,
+        effectiveLevel: mb,
+        isGlobal: true,
       })}
       {powerupCard({
-        index: 1,
-        title: 'Pickup radius',
-        tooltip:
-          'Click bricks from further away. Personal — only your own level affects your reach.',
-        lines: [
-          `Your level: ${stats.pickupRadiusLevel}`,
-          `Reach: ${pickupRadius(stats.pickupRadiusLevel).toFixed(1)} m`,
-        ],
+        ...UPGRADE_INFO.fasterSpawns,
+        valueText: UPGRADE_INFO.fasterSpawns.formatEffect(fs),
+        yourLevel: stats.fasterSpawnsLevel,
+        effectiveLevel: fs,
+        isGlobal: true,
       })}
       {powerupCard({
-        index: 2,
-        title: 'Faster spawns',
-        tooltip:
-          'Bricks spawn more often. World-wide; harmonically stacked across active players.',
-        lines: [
-          `Effective L${fs.toFixed(2)}`,
-          `Interval × ${spawnIntervalScale(fs).toFixed(2)}`,
-          `Your level: ${stats.fasterSpawnsLevel}`,
-        ],
+        ...UPGRADE_INFO.leanDampener,
+        valueText: UPGRADE_INFO.leanDampener.formatEffect(ld),
+        yourLevel: stats.leanDampenerLevel,
+        effectiveLevel: ld,
+        isGlobal: true,
       })}
       {powerupCard({
-        index: 3,
-        title: 'Lean dampener',
-        tooltip:
-          'Buildings lean over more slowly. World-wide; harmonically stacked across active players.',
-        lines: [
-          `Effective L${ld.toFixed(2)}`,
-          `Lean rate × ${leanRateScale(ld).toFixed(2)}`,
-          `Your level: ${stats.leanDampenerLevel}`,
-        ],
+        ...UPGRADE_INFO.sturdyFoundation,
+        valueText: UPGRADE_INFO.sturdyFoundation.formatEffect(sf),
+        yourLevel: stats.sturdyFoundationLevel,
+        effectiveLevel: sf,
+        isGlobal: true,
       })}
       {powerupCard({
-        index: 4,
-        title: 'Sturdy foundation',
-        tooltip:
-          'Buildings tolerate more lean before collapsing. World-wide; harmonically stacked.',
-        lines: [
-          `Effective L${sf.toFixed(2)}`,
-          `Threshold +${sturdyAngleBonus(sf).toFixed(1)}°`,
-          `Your level: ${stats.sturdyFoundationLevel}`,
-        ],
+        ...UPGRADE_INFO.plumbTeacher,
+        valueText: UPGRADE_INFO.plumbTeacher.formatEffect(pt),
+        yourLevel: stats.plumbTeacherLevel,
+        effectiveLevel: pt,
+        isGlobal: true,
       })}
       {powerupCard({
-        index: 5,
-        title: 'Plumb Line',
-        tooltip:
-          'Each brick YOU collect straightens lean by a few extra degrees. Personal — only your level affects your bricks.',
-        lines: [
-          `Your level: ${stats.plumbLineLevel}`,
-          `Bonus: +${plumbLinePersonalBonus(stats.plumbLineLevel).toFixed(1)}° / brick`,
-        ],
+        ...UPGRADE_INFO.generousTeacher,
+        valueText: UPGRADE_INFO.generousTeacher.formatEffect(gt),
+        yourLevel: stats.generousTeacherLevel,
+        effectiveLevel: gt,
+        isGlobal: true,
       })}
       {powerupCard({
-        index: 6,
-        title: 'Plumb Line Teacher',
-        tooltip:
-          'A small extra straighten bonus added on top of EVERY brick collection in the room. World-wide; harmonically stacked.',
-        lines: [
-          `Effective L${getEffectivePlumbTeacherLevel().toFixed(2)}`,
-          `Bonus: +${plumbLineTeacherBonus(getEffectivePlumbTeacherLevel()).toFixed(1)}° / brick`,
-          `Your level: ${stats.plumbTeacherLevel}`,
-        ],
+        ...UPGRADE_INFO.stockpile,
+        valueText: UPGRADE_INFO.stockpile.formatEffect(sk),
+        yourLevel: stats.stockpileLevel,
+        effectiveLevel: sk,
+        isGlobal: true,
+      })}
+
+      {sectionHeader('Personal')}
+      {powerupCard({
+        ...UPGRADE_INFO.pickupRadius,
+        valueText: UPGRADE_INFO.pickupRadius.formatEffect(stats.pickupRadiusLevel),
+        yourLevel: stats.pickupRadiusLevel,
+        isGlobal: false,
       })}
       {powerupCard({
-        index: 7,
-        title: 'Generous Contribution',
-        tooltip:
-          'Each brick YOU collect counts as more toward the building (and your lifetime). Personal.',
-        lines: [
-          `Your level: ${stats.generousLevel}`,
-          `Bonus: +${(contributionPersonalBonus(stats.generousLevel) * 100).toFixed(0)}%`,
-        ],
+        ...UPGRADE_INFO.plumbLine,
+        valueText: UPGRADE_INFO.plumbLine.formatEffect(stats.plumbLineLevel),
+        yourLevel: stats.plumbLineLevel,
+        isGlobal: false,
       })}
       {powerupCard({
-        index: 8,
-        title: 'Generous Teacher',
-        tooltip:
-          'A small extra value bonus on EVERY brick collection in the room. World-wide; harmonically stacked.',
-        lines: [
-          `Effective L${getEffectiveGenerousTeacherLevel().toFixed(2)}`,
-          `Bonus: +${(contributionTeacherBonus(getEffectiveGenerousTeacherLevel()) * 100).toFixed(0)}%`,
-          `Your level: ${stats.generousTeacherLevel}`,
-        ],
+        ...UPGRADE_INFO.generous,
+        valueText: UPGRADE_INFO.generous.formatEffect(stats.generousLevel),
+        yourLevel: stats.generousLevel,
+        isGlobal: false,
       })}
       {powerupCard({
-        index: 9,
-        title: 'Stockpile',
-        tooltip:
-          'Raises the cap on how many bricks can be on the field at once. World-wide; harmonically stacked across active players.',
-        lines: [
-          `Effective L${getEffectiveStockpileLevel().toFixed(2)}`,
-          `Cap × ${brickCapMultiplier(getEffectiveStockpileLevel()).toFixed(2)}`,
-          `Your level: ${stats.stockpileLevel}`,
-        ],
-      })}
-      {powerupCard({
-        index: 10,
-        title: 'Tithe',
-        tooltip:
-          "Keep a bigger cut of every brick you collect for upgrade currency. Doesn't help the building — only your spend power.",
-        lines: [
-          `Your level: ${stats.titheLevel}`,
-          `Bonus: +${(titheBonus(stats.titheLevel) * 100).toFixed(0)}% currency`,
-        ],
+        ...UPGRADE_INFO.tithe,
+        valueText: UPGRADE_INFO.tithe.formatEffect(stats.titheLevel),
+        yourLevel: stats.titheLevel,
+        isGlobal: false,
       })}
     </UiEntity>
   )
 }
 
+function sectionHeader(text: string) {
+  return (
+    <Label
+      value={text}
+      fontSize={11}
+      color={Color4.create(1, 1, 1, 0.85)}
+      uiTransform={{
+        width: '100%',
+        height: 18,
+        margin: '4px 0 4px 0',
+      }}
+      textAlign="middle-left"
+    />
+  )
+}
+
 function powerupCard(opts: {
-  index: number
   title: string
-  tooltip: string
-  lines: string[]
+  description: string
+  valueText: string
+  yourLevel: number
+  effectiveLevel?: number
+  isGlobal: boolean
+  iconPath?: string
 }) {
+  const leftHover = `${opts.title}\n\n${opts.description}`
+  const rightHover = opts.isGlobal
+    ? `${opts.title}\nYour level: ${opts.yourLevel}\nWorld effective: ${(opts.effectiveLevel ?? 0).toFixed(2)}`
+    : `${opts.title}\nYour level: ${opts.yourLevel}`
   return framedPanel({
     width: '100%',
-    margin: '0 0 8px 0',
-    onMouseEnter: () => {
-      hoveredTooltip = opts.tooltip
-      hoveredCardIndex = opts.index
-    },
-    onMouseLeave: () => {
-      if (hoveredTooltip === opts.tooltip) hoveredTooltip = null
-    },
+    margin: '0 0 6px 0',
+    padding: 0,
     children: (
       <UiEntity
         uiTransform={{
           width: '100%',
-          flexDirection: 'column',
+          height: 44,
+          flexDirection: 'row',
+          alignItems: 'center',
         }}
       >
-        <Label
-          value={opts.title}
-          fontSize={13}
-          color={piazzaRed}
-          uiTransform={{ width: '100%', height: 18 }}
+        <UiEntity
+          uiTransform={{
+            width: 44,
+            height: 44,
+            margin: '0 6px 0 0',
+          }}
+          uiBackground={{
+            texture: { src: opts.iconPath ?? ICON_PLACEHOLDER },
+            textureMode: 'stretch',
+          }}
+          onMouseEnter={() => {
+            hoveredTooltip = leftHover
+          }}
+          onMouseLeave={() => {
+            if (hoveredTooltip === leftHover) hoveredTooltip = null
+          }}
         />
-        {opts.lines.map((line, i) => (
+        <UiEntity
+          uiTransform={{
+            flexGrow: 1,
+            height: 44,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+          onMouseEnter={() => {
+            hoveredTooltip = rightHover
+          }}
+          onMouseLeave={() => {
+            if (hoveredTooltip === rightHover) hoveredTooltip = null
+          }}
+        >
           <Label
-            key={i}
-            value={line}
-            fontSize={11}
-            color={black}
-            uiTransform={{ width: '100%', height: 16 }}
+            value={opts.valueText}
+            fontSize={14}
+            color={piazzaRed}
+            uiTransform={{ width: '100%', height: 22 }}
+            textAlign="middle-center"
           />
-        ))}
+        </UiEntity>
       </UiEntity>
     ),
   })
@@ -483,6 +567,7 @@ function tooltipBox(text: string) {
       position: { top, left },
       width: tooltipWidth,
       padding: 8,
+      zIndex: 200,
     },
     children: (
       <Label
@@ -574,6 +659,7 @@ function skillTreeModal() {
         height: '100%',
         alignItems: 'center',
         justifyContent: 'center',
+        zIndex: 100,
       }}
       uiBackground={{ color: panelBlack }}
       onMouseDown={() => {
@@ -611,7 +697,10 @@ function skillTreeModal() {
               />
 
               {skillRow({
-                title: `Multi-bricks  L${stats.multiBricksLevel}`,
+                ...UPGRADE_INFO.multiBricks,
+                level: stats.multiBricksLevel,
+                nowLevel: mbEff,
+                nextLevel: stats.nextEffectiveMultiBricksLevel,
                 sub: `World-wide. Effective ${mbEff.toFixed(2)}.`,
                 cost: levelUpCost(stats.multiBricksLevel),
                 atMax: stats.multiBricksLevel >= MAX_MULTI_BRICK_LEVEL,
@@ -620,7 +709,10 @@ function skillTreeModal() {
                   room.send('levelUpMultiBricks', { ts: Date.now() }),
               })}
               {skillRow({
-                title: `Pickup radius  L${stats.pickupRadiusLevel}`,
+                ...UPGRADE_INFO.pickupRadius,
+                level: stats.pickupRadiusLevel,
+                nowLevel: stats.pickupRadiusLevel,
+                nextLevel: stats.pickupRadiusLevel + 1,
                 sub: `Personal. Reach ${pickupRadius(stats.pickupRadiusLevel).toFixed(1)} m.`,
                 cost: levelUpCost(stats.pickupRadiusLevel),
                 atMax: stats.pickupRadiusLevel >= MAX_MULTI_BRICK_LEVEL,
@@ -629,7 +721,10 @@ function skillTreeModal() {
                   room.send('levelUpPickupRadius', { ts: Date.now() }),
               })}
               {skillRow({
-                title: `Faster spawns  L${stats.fasterSpawnsLevel}`,
+                ...UPGRADE_INFO.fasterSpawns,
+                level: stats.fasterSpawnsLevel,
+                nowLevel: fsEff,
+                nextLevel: stats.nextEffectiveFasterSpawnsLevel,
                 sub: `World-wide. Effective ${fsEff.toFixed(2)}, interval × ${spawnIntervalScale(fsEff).toFixed(2)}.`,
                 cost: levelUpCost(stats.fasterSpawnsLevel),
                 atMax: stats.fasterSpawnsLevel >= MAX_MULTI_BRICK_LEVEL,
@@ -638,7 +733,10 @@ function skillTreeModal() {
                   room.send('levelUpFasterSpawns', { ts: Date.now() }),
               })}
               {skillRow({
-                title: `Lean dampener  L${stats.leanDampenerLevel}`,
+                ...UPGRADE_INFO.leanDampener,
+                level: stats.leanDampenerLevel,
+                nowLevel: ldEff,
+                nextLevel: stats.nextEffectiveLeanDampenerLevel,
                 sub: `World-wide. Effective ${ldEff.toFixed(2)}, lean rate × ${leanRateScale(ldEff).toFixed(2)}.`,
                 cost: levelUpCost(stats.leanDampenerLevel),
                 atMax: stats.leanDampenerLevel >= MAX_MULTI_BRICK_LEVEL,
@@ -647,7 +745,10 @@ function skillTreeModal() {
                   room.send('levelUpLeanDampener', { ts: Date.now() }),
               })}
               {skillRow({
-                title: `Sturdy foundation  L${stats.sturdyFoundationLevel}`,
+                ...UPGRADE_INFO.sturdyFoundation,
+                level: stats.sturdyFoundationLevel,
+                nowLevel: sfEff,
+                nextLevel: stats.nextEffectiveSturdyFoundationLevel,
                 sub: `World-wide. Effective ${sfEff.toFixed(2)}, threshold +${sturdyAngleBonus(sfEff).toFixed(1)}°.`,
                 cost: levelUpCost(stats.sturdyFoundationLevel),
                 atMax: stats.sturdyFoundationLevel >= MAX_MULTI_BRICK_LEVEL,
@@ -656,7 +757,10 @@ function skillTreeModal() {
                   room.send('levelUpSturdyFoundation', { ts: Date.now() }),
               })}
               {skillRow({
-                title: `Plumb Line  L${stats.plumbLineLevel}`,
+                ...UPGRADE_INFO.plumbLine,
+                level: stats.plumbLineLevel,
+                nowLevel: stats.plumbLineLevel,
+                nextLevel: stats.plumbLineLevel + 1,
                 sub: `Personal. Your bricks straighten +${plumbLinePersonalBonus(stats.plumbLineLevel).toFixed(1)}°.`,
                 cost: levelUpCost(stats.plumbLineLevel),
                 atMax: stats.plumbLineLevel >= MAX_MULTI_BRICK_LEVEL,
@@ -664,7 +768,10 @@ function skillTreeModal() {
                 onBuy: () => room.send('levelUpPlumbLine', { ts: Date.now() }),
               })}
               {skillRow({
-                title: `Plumb Line Teacher  L${stats.plumbTeacherLevel}`,
+                ...UPGRADE_INFO.plumbTeacher,
+                level: stats.plumbTeacherLevel,
+                nowLevel: getEffectivePlumbTeacherLevel(),
+                nextLevel: stats.nextEffectivePlumbTeacherLevel,
                 sub: `World-wide. Eff ${getEffectivePlumbTeacherLevel().toFixed(2)}, +${plumbLineTeacherBonus(getEffectivePlumbTeacherLevel()).toFixed(1)}° to all bricks.`,
                 cost: levelUpCost(stats.plumbTeacherLevel),
                 atMax: stats.plumbTeacherLevel >= MAX_MULTI_BRICK_LEVEL,
@@ -673,7 +780,10 @@ function skillTreeModal() {
                   room.send('levelUpPlumbTeacher', { ts: Date.now() }),
               })}
               {skillRow({
-                title: `Generous Contribution  L${stats.generousLevel}`,
+                ...UPGRADE_INFO.generous,
+                level: stats.generousLevel,
+                nowLevel: stats.generousLevel,
+                nextLevel: stats.generousLevel + 1,
                 sub: `Personal. Your bricks worth +${(contributionPersonalBonus(stats.generousLevel) * 100).toFixed(0)}%.`,
                 cost: levelUpCost(stats.generousLevel),
                 atMax: stats.generousLevel >= MAX_MULTI_BRICK_LEVEL,
@@ -681,7 +791,10 @@ function skillTreeModal() {
                 onBuy: () => room.send('levelUpGenerous', { ts: Date.now() }),
               })}
               {skillRow({
-                title: `Generous Teacher  L${stats.generousTeacherLevel}`,
+                ...UPGRADE_INFO.generousTeacher,
+                level: stats.generousTeacherLevel,
+                nowLevel: getEffectiveGenerousTeacherLevel(),
+                nextLevel: stats.nextEffectiveGenerousTeacherLevel,
                 sub: `World-wide. Eff ${getEffectiveGenerousTeacherLevel().toFixed(2)}, +${(contributionTeacherBonus(getEffectiveGenerousTeacherLevel()) * 100).toFixed(0)}% to all bricks.`,
                 cost: levelUpCost(stats.generousTeacherLevel),
                 atMax: stats.generousTeacherLevel >= MAX_MULTI_BRICK_LEVEL,
@@ -690,7 +803,10 @@ function skillTreeModal() {
                   room.send('levelUpGenerousTeacher', { ts: Date.now() }),
               })}
               {skillRow({
-                title: `Stockpile  L${stats.stockpileLevel}`,
+                ...UPGRADE_INFO.stockpile,
+                level: stats.stockpileLevel,
+                nowLevel: getEffectiveStockpileLevel(),
+                nextLevel: stats.nextEffectiveStockpileLevel,
                 sub: `World-wide. Eff ${getEffectiveStockpileLevel().toFixed(2)}, brick cap × ${brickCapMultiplier(getEffectiveStockpileLevel()).toFixed(2)}.`,
                 cost: levelUpCost(stats.stockpileLevel),
                 atMax: stats.stockpileLevel >= MAX_MULTI_BRICK_LEVEL,
@@ -698,7 +814,10 @@ function skillTreeModal() {
                 onBuy: () => room.send('levelUpStockpile', { ts: Date.now() }),
               })}
               {skillRow({
-                title: `Tithe  L${stats.titheLevel}`,
+                ...UPGRADE_INFO.tithe,
+                level: stats.titheLevel,
+                nowLevel: stats.titheLevel,
+                nextLevel: stats.titheLevel + 1,
                 sub: `Personal. +${(titheBonus(stats.titheLevel) * 100).toFixed(0)}% upgrade currency on every brick you collect.`,
                 cost: levelUpCost(stats.titheLevel),
                 atMax: stats.titheLevel >= MAX_MULTI_BRICK_LEVEL,
@@ -726,12 +845,25 @@ function skillTreeModal() {
 
 function skillRow(opts: {
   title: string
+  description: string
+  formatEffect: (level: number) => string
+  level: number
+  // Inputs to formatEffect for the button tooltip. For personal skills these
+  // are level / level+1; for global skills they're the world-effective now
+  // and the world-effective if THIS player levels up by 1 (server-computed).
+  nowLevel: number
+  nextLevel: number
   sub: string
   cost: number
   atMax: boolean
   canBuy: boolean
   onBuy: () => void
 }) {
+  const tooltip = `${opts.title}\n\n${opts.description}`
+  const displayTitle = `${opts.title}  L${opts.level}`
+  const buttonTooltip = opts.atMax
+    ? `${opts.title}\n\nNow:  ${opts.formatEffect(opts.nowLevel)}\nMAX level reached.`
+    : `${opts.title}\n\nNow:    ${opts.formatEffect(opts.nowLevel)}\nNext:  ${opts.formatEffect(opts.nextLevel)}`
   return (
     <UiEntity
       uiTransform={{
@@ -744,6 +876,12 @@ function skillRow(opts: {
         borderRadius: 6,
       }}
       uiBackground={{ color: Color4.create(0, 0, 0, 0.05) }}
+      onMouseEnter={() => {
+        hoveredTooltip = tooltip
+      }}
+      onMouseLeave={() => {
+        if (hoveredTooltip === tooltip) hoveredTooltip = null
+      }}
     >
       <UiEntity
         uiTransform={{
@@ -752,7 +890,7 @@ function skillRow(opts: {
         }}
       >
         <Label
-          value={opts.title}
+          value={displayTitle}
           fontSize={14}
           color={black}
           uiTransform={{ width: '100%', height: 20 }}
@@ -764,20 +902,31 @@ function skillRow(opts: {
           uiTransform={{ width: '100%', height: 16 }}
         />
       </UiEntity>
-      {roundedButton({
-        value: opts.atMax
-          ? 'MAX'
-          : opts.canBuy
-          ? `Level up (${opts.cost})`
-          : `Need ${opts.cost}`,
-        variant: opts.canBuy ? 'primary' : 'secondary',
-        width: 150,
-        height: 28,
-        fontSize: 11,
-        onMouseDown: () => {
-          if (opts.canBuy && !opts.atMax) opts.onBuy()
-        },
-      })}
+      <UiEntity
+        uiTransform={{ width: 150, height: 28 }}
+        onMouseEnter={() => {
+          hoveredTooltip = buttonTooltip
+        }}
+        onMouseLeave={() => {
+          // Mouse leaves button but is still inside the row → restore row tooltip
+          hoveredTooltip = tooltip
+        }}
+      >
+        {roundedButton({
+          value: opts.atMax
+            ? 'MAX'
+            : opts.canBuy
+            ? `Level up (${opts.cost})`
+            : `Need ${opts.cost}`,
+          variant: opts.canBuy ? 'primary' : 'secondary',
+          width: 150,
+          height: 28,
+          fontSize: 11,
+          onMouseDown: () => {
+            if (opts.canBuy && !opts.atMax) opts.onBuy()
+          },
+        })}
+      </UiEntity>
     </UiEntity>
   )
 }
