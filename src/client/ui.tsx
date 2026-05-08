@@ -294,7 +294,7 @@ const UPGRADE_INFO: Record<string, UpgradeInfo> = {
   multiBricks: {
     title: 'Brick Bonus',
     description:
-      'Bricks spawn in stacks of 1 up to (level+1), uniformly random. World-wide — combines harmonically across active players.',
+      'Bricks spawn in stacks of 1 up to (level+1), skewed toward smaller stacks. World-wide — combines harmonically across active players.',
     formatEffect: (L) => {
       const max = maxBrickStack(L)
       return max === 1 ? '1' : `1–${max}`

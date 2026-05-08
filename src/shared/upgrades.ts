@@ -19,10 +19,12 @@ export function isAtMax(upgradeKey: string, level: number): boolean {
   return level >= maxLevelFor(upgradeKey)
 }
 
-// Brick Bonus (world-wide). Each spawn's stack size is uniform in
-//   [1, floor((L+1) - eps)+1]
-// driven by a single rng draw. At integer L, value ∈ [1, L+1]; at fractional
-// L the upper bucket exists with reduced probability, giving smooth scaling.
+// Brick Bonus (world-wide). Each spawn's stack size is in [1, floor(L)+1],
+// drawn via rng^p so smaller stacks are more common than huge ones.
+// Power 2 ≈ "a bit" skewed: at L=20, value=1 lands ~22% of the time
+// instead of the linear ~5%, while value=21 still appears ~2%.
+export const BRICK_VALUE_RNG_POWER = 2
+
 export function maxBrickStack(effectiveLevel: number): number {
   if (effectiveLevel <= 0) return 1
   // Largest value rollBrickValue can return: 1 + floor(span - eps).
@@ -35,7 +37,7 @@ export function rollBrickValue(
   rng: () => number = Math.random
 ): number {
   const span = Math.max(1, effectiveLevel + 1)
-  return 1 + Math.floor(rng() * span)
+  return 1 + Math.floor(Math.pow(rng(), BRICK_VALUE_RNG_POWER) * span)
 }
 
 // Builder's Reach (personal). 1m + level, hard-capped at level 10 (radius 11m).

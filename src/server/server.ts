@@ -409,16 +409,22 @@ function brickSpawnSystem(dt: number) {
   const cap = ws
     ? Math.round(MAX_ACTIVE_BRICKS * brickCapMultiplier(ws.effectiveStockpileLevel))
     : MAX_ACTIVE_BRICKS
+  // While at cap, freeze the timer entirely so the next spawn after a brick
+  // is collected waits a full interval rather than firing instantly.
+  if (countActiveBricks() >= cap) {
+    timeSinceSpawn = 0
+    return
+  }
   // Edge case: zero or negative interval -> one per tick (prevents infinite loop)
   if (interval <= 0) {
-    if (countActiveBricks() < cap) spawnBrick()
+    spawnBrick()
     return
   }
   timeSinceSpawn += dt
   let spawned = 0
   while (timeSinceSpawn >= interval && spawned < MAX_SPAWNS_PER_TICK) {
     if (countActiveBricks() >= cap) {
-      timeSinceSpawn = interval
+      timeSinceSpawn = 0
       return
     }
     timeSinceSpawn -= interval
