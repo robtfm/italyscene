@@ -186,12 +186,21 @@ function getCurrentBuildingKey(): string | null {
   return null
 }
 
+const COMPLETED_PERSIST_MS = 60 * 60 * 1000 // 1 hour
+
 function buildingVisualSystem(dt: number) {
   const activeKey = getCurrentBuildingKey()
+  const now = Date.now()
   for (const [entity, state] of engine.getEntitiesWith(BuildingState)) {
     const cfg = configForStateEntity(entity)
     if (!cfg) continue
     if (state.buildingKey === activeKey) {
+      applyBuildingVisual(cfg, entity, dt)
+    } else if (
+      state.lastCompletedAt > 0 &&
+      now - state.lastCompletedAt < COMPLETED_PERSIST_MS
+    ) {
+      // Recently completed — keep it standing at its finished state.
       applyBuildingVisual(cfg, entity, dt)
     } else {
       hideBuilding(cfg)

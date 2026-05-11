@@ -26,6 +26,10 @@ export const BuildingState = engine.defineComponent('italyscene:BuildingState', 
   baseGroundY: Schemas.Float,
   baseInitialized: Schemas.Boolean,
   completedTime: Schemas.Float,
+  // Date.now() (ms) of the most recent completion. Clients render the
+  // building at its completed state for an hour after this timestamp;
+  // re-activation (next pick) zeroes the field via transitionToBuilding.
+  lastCompletedAt: Schemas.Int64,
 })
 
 export const Brick = engine.defineComponent('italyscene:Brick', {

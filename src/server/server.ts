@@ -436,6 +436,7 @@ function attachBuildingState(cfg: BuildingConfig) {
     baseGroundY: 0,
     baseInitialized: false,
     completedTime: 0,
+    lastCompletedAt: 0,
   })
   syncEntity(stateEntity, [BuildingState.componentId])
 }
@@ -824,6 +825,11 @@ async function handleBuildingCompletion(cfg: BuildingConfig) {
     '— eligible contributors:',
     eligible.length
   )
+  // Mark the completion timestamp so the client keeps rendering this
+  // building (at its finished state) for the next hour.
+  if (completedEntity) {
+    BuildingState.getMutable(completedEntity).lastCompletedAt = Date.now()
+  }
   // The building's state.level is no longer auto-bumped; pickNextBuildingKey
   // sets the level on the chosen building based on present players' pool
   // entry. Persistence still tracks the most recent level played.
@@ -970,18 +976,10 @@ async function transitionToBuilding(
   if (!worldStateEntity) return
   const ws = WorldState.getMutable(worldStateEntity)
 
-  // Reset the just-completed building's state (it'll fall to "hidden" client-side
-  // since it's no longer the current building)
-  const completedEntity = findBuildingStateEntity(completedCfg.entityName)
-  if (completedEntity) {
-    const s = BuildingState.getMutable(completedEntity)
-    s.riseProgress = 0
-    s.currentLean = 0
-    s.collapsing = false
-    s.collapseTime = 0
-    s.collapseStartProgress = 0
-    s.completedTime = 0
-  }
+  // Keep the just-completed building's state intact so it remains
+  // visually rendered at its finished state for the next hour (driven
+  // by lastCompletedAt). If the very same building gets re-picked as
+  // the next active, the reset below clears it.
 
   // Reset the new building's state, set its level to the picked entry's
   // level, and clear lazy-init flag so it re-reads its composite-loaded
@@ -997,6 +995,7 @@ async function transitionToBuilding(
     s.collapseStartProgress = 0
     s.completedTime = 0
     s.baseInitialized = false
+    s.lastCompletedAt = 0
   }
 
   ws.brickCount = 0
