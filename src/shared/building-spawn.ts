@@ -8,13 +8,17 @@ import {
 import { Color4, Quaternion } from '@dcl/sdk/math'
 import { BUILDING_CONFIGS, BuildingConfig } from './buildings'
 
+// Toggle to show static, fully-grown copies of every building at their
+// in-world positions. Useful for dialling in GLB scales/orientations.
+const SHOW_DEBUG_PREVIEWS = false
+
 // Both server and client call this at init. Each building with a
 // programmaticSpawn block gets its base + visible entities created here.
 export function spawnPlaceholderBuildings() {
   for (const cfg of BUILDING_CONFIGS) {
     if (!cfg.programmaticSpawn) continue
     spawnOne(cfg)
-    spawnPreviewCopy(cfg)
+    if (SHOW_DEBUG_PREVIEWS) spawnPreviewCopy(cfg)
   }
 }
 

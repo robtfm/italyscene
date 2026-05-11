@@ -31,6 +31,10 @@ export type BuildingConfig = {
     pitchDeg?: number // rotation around X axis (compensates baked-in tilts)
     glbSrc: string
     glbScale?: number // uniform multiplier (default 1)
+    // Extra sink (in metres) applied at riseProgress=0 only, fading linearly
+    // to 0 by riseProgress=1. Use to hide the buried base detail of models
+    // that should "emerge" from the ground rather than start above it.
+    burialDepth?: number
   }
 }
 
@@ -60,6 +64,7 @@ export const PISA: BuildingConfig = {
     position: { x: 40, y: 3, z: 40 },
     glbSrc: 'assets/Models/buildings/pisa.glb',
     glbScale: 27, // 1.5× of prior 18
+    burialDepth: 6,
     pitchDeg: 10, // model has baked-in lean; counter-rotate around +X
 
   },
@@ -92,6 +97,7 @@ export const COLOSSEUM: BuildingConfig = {
     yawDeg: 0,
     glbSrc: 'assets/Models/buildings/colosseum.glb',
     glbScale: 6, // native ~4m wide (internal 100× scale); target ~24m
+    burialDepth: 1.5,
 
   },
 }
@@ -123,6 +129,7 @@ export const DUOMO: BuildingConfig = {
     yawDeg: 0, // 9 o'clock rotation baked into the GLB root node
     glbSrc: 'assets/Models/buildings/duomo.glb',
     glbScale: 0.004, // 80% of prior 0.005; ~15m tall
+    burialDepth: 3,
 
   },
 }
@@ -154,6 +161,7 @@ export const PANTHEON: BuildingConfig = {
     yawDeg: 120, // faces 4 o'clock
     glbSrc: 'assets/Models/buildings/pantheon.glb',
     glbScale: 0.0048, // dome-node scale (1500/500) baked in; native span ~1650; target ~8m
+    burialDepth: 1,
 
   },
 }
@@ -215,6 +223,7 @@ export const DOGES_PALACE: BuildingConfig = {
     yawDeg: 60, // faces 2 o'clock
     glbSrc: 'assets/Models/buildings/doges.glb',
     glbScale: 1.5,
+    burialDepth: 3,
   },
 }
 

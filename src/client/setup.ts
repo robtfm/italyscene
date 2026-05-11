@@ -260,19 +260,26 @@ function applyBuildingVisual(
   if (visible) {
     const t = Transform.getMutableOrNull(visible)
     if (t) {
-      t.position.y =
-        cfg.buriedY + (cfg.fullY - cfg.buriedY) * state.riseProgress
       const scaleFactor =
         cfg.buriedScaleY +
         (cfg.fullScaleY - cfg.buriedScaleY) * state.riseProgress
       if (cfg.programmaticSpawn?.glbSrc) {
         // GLB: scale uniformly so the model doesn't stretch on rise.
+        // Position y scales with the same factor so the model's bottom
+        // stays anchored at base.y — the building grows from small to full
+        // size at ground level. burialDepth (optional) sinks the model
+        // further at riseProgress=0 and fades to 0 by full rise.
         const base = cfg.programmaticSpawn.glbScale ?? 1
+        const burial = cfg.programmaticSpawn.burialDepth ?? 0
         t.scale.x = base * scaleFactor
         t.scale.y = base * scaleFactor
         t.scale.z = base * scaleFactor
+        t.position.y =
+          cfg.fullY * scaleFactor - burial * (1 - state.riseProgress)
       } else {
-        // Primitive: only Y stretches; X/Z stay at their spawn footprint.
+        // Primitive: original anim — position moves up, Y scale stretches.
+        t.position.y =
+          cfg.buriedY + (cfg.fullY - cfg.buriedY) * state.riseProgress
         t.scale.y = scaleFactor
       }
     }
