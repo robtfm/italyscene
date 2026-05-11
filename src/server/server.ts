@@ -54,6 +54,9 @@ let nextBrickId = 1
 const currentRoundContributors = new Set<string>()
 
 type PlayerProfile = {
+  // How many times the player has prestiged. Persisted, never reset by
+  // prestige; surfaced to the client for the stats panel.
+  prestigeLevel: number
   lifetimeContributions: number
   // Linear unlock counter scanning the (building × level) grid row-by-row.
   //   0 → only Pisa Lv 1, 1 → +Colosseum Lv 1, ...
@@ -66,6 +69,10 @@ type PlayerProfile = {
   // Increments by 1 (capped at completedLevel) each time the player
   // participates in beating that building at or above their current max.
   maxBuildingLevel: Record<string, number>
+  // Snapshot of maxBuildingLevel at the most recent prestige. Drives the
+  // 2^N personal income multiplier in applyBrickAward — only achievements
+  // "banked" via prestige count toward the bonus.
+  prestigedMaxBuildingLevel: Record<string, number>
   bricksSpent: number
   // Pity counter: +1 per pick where the rolled building's level wouldn't
   // advance this player's availableBuildings (or unlock something they want).
@@ -113,9 +120,11 @@ const greetedEntities = new Set<Entity>()
 
 function defaultProfile(): PlayerProfile {
   return {
+    prestigeLevel: 0,
     lifetimeContributions: 0,
     availableBuildings: 0,
     maxBuildingLevel: {},
+    prestigedMaxBuildingLevel: {},
     bricksSpent: 0,
     pity: 0,
     multiBricksLevel: 0,
@@ -143,9 +152,11 @@ async function loadProfile(address: string): Promise<PlayerProfile> {
         const legacyAvailable =
           typeof parsed.unlockedTier === 'number' ? parsed.unlockedTier - 1 : 0
         return {
+          prestigeLevel: parsed.prestigeLevel ?? 0,
           lifetimeContributions: parsed.lifetimeContributions,
           availableBuildings: parsed.availableBuildings ?? legacyAvailable,
           maxBuildingLevel: parsed.maxBuildingLevel ?? {},
+          prestigedMaxBuildingLevel: parsed.prestigedMaxBuildingLevel ?? {},
           bricksSpent: parsed.bricksSpent ?? 0,
           pity: parsed.pity ?? 0,
           multiBricksLevel: parsed.multiBricksLevel ?? 0,
@@ -320,6 +331,7 @@ function sendMyStats(rawAddress: string, profile: PlayerProfile) {
   room.send(
     'myStatsUpdate',
     {
+      prestigeLevel: profile.prestigeLevel ?? 0,
       lifetimeContributions: profile.lifetimeContributions,
       bricksSpent: profile.bricksSpent,
       multiBricksLevel: profile.multiBricksLevel,
@@ -334,6 +346,9 @@ function sendMyStats(rawAddress: string, profile: PlayerProfile) {
       stockpileLevel: profile.stockpileLevel,
       titheLevel: profile.titheLevel,
       maxBuildingLevelJson: JSON.stringify(profile.maxBuildingLevel),
+      prestigedMaxBuildingLevelJson: JSON.stringify(
+        profile.prestigedMaxBuildingLevel ?? {}
+      ),
       ...next,
     },
     { to: [rawAddress] }
@@ -414,6 +429,9 @@ export async function initServer() {
   })
   room.onMessage('levelUpTithe', (_data, context) => {
     if (context) void handleLevelUp(context.from, 'titheLevel')
+  })
+  room.onMessage('prestige', (_data, context) => {
+    if (context) void handlePrestige(context.from)
   })
 
   engine.addSystem(brickSpawnSystem)
@@ -648,9 +666,18 @@ async function applyBrickAward(playerAddress: string, baseValue: number) {
     1 + personalStraightenFrac + teacherStraightenFrac
 
   // Tithe (personal) multiplies only the upgrade-currency credit, not the
-  // building progress.
+  // building progress. Prestige bonus: 2^maxBuildingLevel for the current
+  // building stacks on top — incentivises specialising per landmark.
   const tithe = titheBonus(profile.titheLevel)
-  const creditValue = Math.max(baseValue, Math.round(baseValue * (1 + tithe)))
+  const activeKey = ws?.currentBuildingKey ?? ''
+  const prestigeMult = Math.pow(
+    2,
+    profile.prestigedMaxBuildingLevel[activeKey] ?? 0
+  )
+  const creditValue = Math.max(
+    baseValue,
+    Math.round(baseValue * (1 + tithe) * prestigeMult)
+  )
 
   incrementBrickCount(buildingValue, straightenMultiplier)
   creditPlayer(playerAddress, creditValue)
@@ -677,6 +704,34 @@ type UpgradeKey =
   | 'generousTeacherLevel'
   | 'stockpileLevel'
   | 'titheLevel'
+
+async function handlePrestige(rawAddress: string) {
+  const address = rawAddress.toLowerCase()
+  const profile = await ensureProfile(address)
+  // Snapshot the current building maxes; this snapshot drives the 2^N
+  // income bonus going forward. Future maxBuildingLevel growth doesn't
+  // affect the bonus until the next prestige.
+  profile.prestigedMaxBuildingLevel = { ...profile.maxBuildingLevel }
+  profile.prestigeLevel = (profile.prestigeLevel ?? 0) + 1
+  profile.lifetimeContributions = 0
+  profile.bricksSpent = 0
+  profile.availableBuildings = 0
+  profile.pity = 0
+  profile.multiBricksLevel = 0
+  profile.pickupRadiusLevel = 0
+  profile.fasterSpawnsLevel = 0
+  profile.leanDampenerLevel = 0
+  profile.sturdyFoundationLevel = 0
+  profile.plumbLineLevel = 0
+  profile.plumbTeacherLevel = 0
+  profile.generousLevel = 0
+  profile.generousTeacherLevel = 0
+  profile.stockpileLevel = 0
+  profile.titheLevel = 0
+  void saveProfile(address, profile)
+  sendMyStats(rawAddress, profile)
+  console.log('[SERVER]', address, 'prestiged')
+}
 
 async function handleLevelUp(rawAddress: string, key: UpgradeKey) {
   const address = rawAddress.toLowerCase()

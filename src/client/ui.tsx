@@ -49,6 +49,7 @@ const black = Color4.Black()
 
 let skillTreeOpen = false
 let statsOpen = false
+let prestigeConfirming = false
 let hoveredTooltip: string | null = null
 let hoveredCardIndex = 0
 const acknowledgedBuyables = new Set<string>()
@@ -920,7 +921,11 @@ function statsModal() {
               }}
             >
               <Label
-                value="Your stats"
+                value={
+                  stats.prestigeLevel > 0
+                    ? `Your stats — Prestige Lv ${stats.prestigeLevel}`
+                    : 'Your stats'
+                }
                 fontSize={20}
                 color={piazzaRed}
                 uiTransform={{ width: '100%', height: 30 }}
@@ -931,7 +936,7 @@ function statsModal() {
               {statsLine('Available', available)}
 
               <Label
-                value="Buildings — your max level"
+                value="Buildings — your max level (income mult)"
                 fontSize={12}
                 color={black}
                 uiTransform={{ width: '100%', height: 20, margin: '12px 0 4px 0' }}
@@ -941,19 +946,58 @@ function statsModal() {
                 buildingStatsRow({
                   name: cfg.displayName,
                   yourMax: stats.maxBuildingLevel[cfg.entityName] ?? 0,
+                  prestigedMax:
+                    stats.prestigedMaxBuildingLevel[cfg.entityName] ?? 0,
                 })
               )}
 
-              {roundedButton({
-                value: 'Close',
-                variant: 'secondary',
-                width: 100,
-                height: 28,
-                margin: '12px 0 0 0',
-                onMouseDown: () => {
-                  statsOpen = false
-                },
-              })}
+              <UiEntity
+                uiTransform={{
+                  width: '100%',
+                  height: 36,
+                  flexDirection: 'row',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  margin: '16px 0 0 0',
+                }}
+              >
+                {roundedButton({
+                  value: prestigeConfirming
+                    ? 'Confirm prestige?'
+                    : 'Prestige',
+                  variant: prestigeConfirming ? 'primary' : 'secondary',
+                  width: 180,
+                  height: 28,
+                  onMouseDown: () => {
+                    if (prestigeConfirming) {
+                      room.send('prestige', { ts: Date.now() })
+                      prestigeConfirming = false
+                      statsOpen = false
+                    } else {
+                      prestigeConfirming = true
+                    }
+                  },
+                })}
+                {roundedButton({
+                  value: 'Close',
+                  variant: 'secondary',
+                  width: 100,
+                  height: 28,
+                  onMouseDown: () => {
+                    statsOpen = false
+                    prestigeConfirming = false
+                  },
+                })}
+              </UiEntity>
+              {prestigeConfirming ? (
+                <Label
+                  value="Resets bricks + upgrades. Keeps building maxes (income × 2^max per brick on each building)."
+                  fontSize={11}
+                  color={piazzaRed}
+                  uiTransform={{ width: '100%', height: 18, margin: '6px 0 0 0' }}
+                  textAlign="middle-center"
+                />
+              ) : null}
             </UiEntity>
           ),
         })}
@@ -989,7 +1033,12 @@ function statsLine(label: string, value: number) {
   )
 }
 
-function buildingStatsRow(opts: { name: string; yourMax: number }) {
+function buildingStatsRow(opts: {
+  name: string
+  yourMax: number
+  prestigedMax: number
+}) {
+  const incomeMult = Math.pow(2, opts.prestigedMax)
   return (
     <UiEntity
       uiTransform={{
@@ -1006,13 +1055,20 @@ function buildingStatsRow(opts: { name: string; yourMax: number }) {
         value={opts.name}
         fontSize={13}
         color={black}
-        uiTransform={{ width: '70%', height: 20 }}
+        uiTransform={{ width: '55%', height: 20 }}
       />
       <Label
         value={`Lv ${opts.yourMax}`}
         fontSize={13}
         color={opts.yourMax > 0 ? piazzaRed : black}
-        uiTransform={{ width: '30%', height: 20 }}
+        uiTransform={{ width: '20%', height: 20 }}
+        textAlign="middle-center"
+      />
+      <Label
+        value={opts.prestigedMax > 0 ? `×${incomeMult}` : '—'}
+        fontSize={11}
+        color={black}
+        uiTransform={{ width: '25%', height: 20 }}
         textAlign="middle-right"
       />
     </UiEntity>

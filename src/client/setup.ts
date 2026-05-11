@@ -22,6 +22,7 @@ const handledBricks = new Set<Entity>()
 const localDisplayLean = new Map<Entity, number>()
 
 export type MyStats = {
+  prestigeLevel: number
   lifetimeContributions: number
   bricksSpent: number
   multiBricksLevel: number
@@ -43,8 +44,10 @@ export type MyStats = {
   nextEffectiveGenerousTeacherLevel: number
   nextEffectiveStockpileLevel: number
   maxBuildingLevel: Record<string, number>
+  prestigedMaxBuildingLevel: Record<string, number>
 }
 let myStats: MyStats = {
+  prestigeLevel: 0,
   lifetimeContributions: 0,
   bricksSpent: 0,
   multiBricksLevel: 0,
@@ -66,6 +69,7 @@ let myStats: MyStats = {
   nextEffectiveGenerousTeacherLevel: 0,
   nextEffectiveStockpileLevel: 0,
   maxBuildingLevel: {},
+  prestigedMaxBuildingLevel: {},
 }
 
 function parseMaxBuildingLevel(raw: string): Record<string, number> {
@@ -93,6 +97,7 @@ export function initClient() {
   room.onMessage('myStatsUpdate', (data) => {
     const prevRadiusLevel = myStats.pickupRadiusLevel
     myStats = {
+      prestigeLevel: data.prestigeLevel,
       lifetimeContributions: data.lifetimeContributions,
       bricksSpent: data.bricksSpent,
       multiBricksLevel: data.multiBricksLevel,
@@ -114,6 +119,9 @@ export function initClient() {
       nextEffectiveGenerousTeacherLevel: data.nextEffectiveGenerousTeacherLevel,
       nextEffectiveStockpileLevel: data.nextEffectiveStockpileLevel,
       maxBuildingLevel: parseMaxBuildingLevel(data.maxBuildingLevelJson),
+      prestigedMaxBuildingLevel: parseMaxBuildingLevel(
+        data.prestigedMaxBuildingLevelJson
+      ),
     }
     if (data.pickupRadiusLevel !== prevRadiusLevel) {
       // Re-register all brick proximity handlers with the new radius.

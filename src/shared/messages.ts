@@ -14,6 +14,7 @@ export const Messages = {
   debugAddBrick: Schemas.Map({ ts: Schemas.Int }),
   contributionUpdate: Schemas.Map({ count: Schemas.Int }),
   myStatsUpdate: Schemas.Map({
+    prestigeLevel: Schemas.Int,
     lifetimeContributions: Schemas.Int,
     bricksSpent: Schemas.Int,
     multiBricksLevel: Schemas.Int,
@@ -40,6 +41,9 @@ export const Messages = {
     // level personally beaten per building. Drives gate checks for
     // upgrades that require a specific building at a specific level.
     maxBuildingLevelJson: Schemas.String,
+    // JSON-encoded snapshot taken at last prestige; drives the 2^N
+    // personal income multiplier per building.
+    prestigedMaxBuildingLevelJson: Schemas.String,
   }),
   levelUpMultiBricks: Schemas.Map({ ts: Schemas.Int }),
   levelUpPickupRadius: Schemas.Map({ ts: Schemas.Int }),
@@ -52,6 +56,11 @@ export const Messages = {
   levelUpGenerousTeacher: Schemas.Map({ ts: Schemas.Int }),
   levelUpStockpile: Schemas.Map({ ts: Schemas.Int }),
   levelUpTithe: Schemas.Map({ ts: Schemas.Int }),
+  // Player-initiated reset: zeroes currency + all upgrade levels +
+  // availableBuildings; keeps maxBuildingLevel. The kept maxes drive a
+  // 2^max income multiplier per building on every brick the player
+  // collects there.
+  prestige: Schemas.Map({ ts: Schemas.Int }),
 }
 
 export const room = registerMessages(Messages)
