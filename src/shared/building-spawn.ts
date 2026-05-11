@@ -1,22 +1,20 @@
 import {
   engine,
   Transform,
-  MeshRenderer,
-  Material,
+  GltfContainer,
   Name,
+  TextShape,
 } from '@dcl/sdk/ecs'
-import { Color4 } from '@dcl/sdk/math'
+import { Color4, Quaternion } from '@dcl/sdk/math'
 import { BUILDING_CONFIGS, BuildingConfig } from './buildings'
 
-// Spawn placeholder cylinder visuals for any BuildingConfig with a
-// programmaticSpawn block. Buildings already declared in main.composite
-// (Pisa, Colosseum) skip this. Both server and client call it so each peer
-// has matching named entities — Transform mutations are local; the synced
-// BuildingState drives the actual building visual via buildingVisualSystem.
+// Both server and client call this at init. Each building with a
+// programmaticSpawn block gets its base + visible entities created here.
 export function spawnPlaceholderBuildings() {
   for (const cfg of BUILDING_CONFIGS) {
     if (!cfg.programmaticSpawn) continue
     spawnOne(cfg)
+    spawnPreviewCopy(cfg)
   }
 }
 
@@ -27,21 +25,63 @@ function spawnOne(cfg: BuildingConfig) {
   Transform.create(base, {
     position: { x: ps.position.x, y: ps.position.y, z: ps.position.z },
   })
+
   const visible = engine.addEntity()
   Name.create(visible, { value: cfg.entityName })
+  const s = ps.glbScale ?? 1
   Transform.create(visible, {
     position: { x: 0, y: cfg.buriedY, z: 0 },
-    scale: {
-      x: ps.cylinderRadius * 2,
-      y: cfg.buriedScaleY,
-      z: ps.cylinderRadius * 2,
-    },
+    scale: { x: s, y: s * cfg.buriedScaleY, z: s },
+    rotation: Quaternion.fromEulerDegrees(
+      ps.pitchDeg ?? 0,
+      ps.yawDeg ?? 0,
+      0
+    ),
     parent: base,
   })
-  MeshRenderer.setCylinder(visible)
-  Material.setPbrMaterial(visible, {
-    albedoColor: Color4.create(ps.color.r, ps.color.g, ps.color.b, 1),
-    roughness: 0.85,
-    metallic: 0.0,
+  GltfContainer.create(visible, { src: ps.glbSrc })
+}
+
+// Debug-only: a static, fully-grown copy of each building at its actual
+// "completed" position (where the real one will rise to). Lets us eyeball
+// all six at once. The active building's animated copy will visually
+// overlap with its preview when that building is being played.
+function spawnPreviewCopy(cfg: BuildingConfig) {
+  const ps = cfg.programmaticSpawn
+  if (!ps) return
+  const fullScale = (ps.glbScale ?? 1) * cfg.fullScaleY
+
+  const preview = engine.addEntity()
+  Transform.create(preview, {
+    position: {
+      x: ps.position.x,
+      y: ps.position.y + cfg.fullY,
+      z: ps.position.z,
+    },
+    scale: { x: fullScale, y: fullScale, z: fullScale },
+    rotation: Quaternion.fromEulerDegrees(
+      ps.pitchDeg ?? 0,
+      ps.yawDeg ?? 0,
+      0
+    ),
+  })
+  GltfContainer.create(preview, { src: ps.glbSrc })
+
+  // Floating name label above the building (uses a generous fixed offset
+  // that clears the tallest model with margin).
+  const label = engine.addEntity()
+  Transform.create(label, {
+    position: {
+      x: ps.position.x,
+      y: ps.position.y + 25,
+      z: ps.position.z,
+    },
+  })
+  TextShape.create(label, {
+    text: cfg.displayName,
+    fontSize: 8,
+    textColor: Color4.create(1, 1, 1, 1),
+    outlineColor: Color4.create(0, 0, 0, 1),
+    outlineWidth: 0.15,
   })
 }

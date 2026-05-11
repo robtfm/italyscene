@@ -23559,90 +23559,6 @@
             },
             "parent": 0
           }
-        },
-        "1389": {
-          "json": {
-            "position": {
-              "x": 0,
-              "y": -1.5,
-              "z": 0
-            },
-            "scale": {
-              "x": 5,
-              "y": 3,
-              "z": 5
-            },
-            "rotation": {
-              "x": 0,
-              "y": 0,
-              "z": 0,
-              "w": 1
-            },
-            "parent": 1390
-          }
-        },
-        "1390": {
-          "json": {
-            "position": {
-              "x": 45,
-              "y": 4,
-              "z": 55
-            },
-            "scale": {
-              "x": 1,
-              "y": 1,
-              "z": 1
-            },
-            "rotation": {
-              "x": 0,
-              "y": 0,
-              "z": 0,
-              "w": 1
-            },
-            "parent": 0
-          }
-        },
-        "1391": {
-          "json": {
-            "position": {
-              "x": 25,
-              "y": 2.6,
-              "z": 20
-            },
-            "scale": {
-              "x": 1,
-              "y": 1,
-              "z": 1
-            },
-            "rotation": {
-              "x": 0,
-              "y": 0,
-              "z": 0,
-              "w": 1
-            },
-            "parent": 0
-          }
-        },
-        "1392": {
-          "json": {
-            "position": {
-              "x": 0,
-              "y": -0.5,
-              "z": 0
-            },
-            "scale": {
-              "x": 14,
-              "y": 2,
-              "z": 14
-            },
-            "rotation": {
-              "x": 0,
-              "y": 0,
-              "z": 0,
-              "w": 1
-            },
-            "parent": 1391
-          }
         }
       }
     },
@@ -28632,26 +28548,6 @@
         "1388": {
           "json": {
             "value": "FlowerWildPurple_58"
-          }
-        },
-        "1389": {
-          "json": {
-            "value": "TowerOfPisa"
-          }
-        },
-        "1390": {
-          "json": {
-            "value": "TowerOfPisa_Base"
-          }
-        },
-        "1391": {
-          "json": {
-            "value": "Colosseum_Base"
-          }
-        },
-        "1392": {
-          "json": {
-            "value": "Colosseum"
           }
         }
       }
@@ -42088,40 +41984,6 @@
               }
             }
           }
-        },
-        "1389": {
-          "json": {
-            "material": {
-              "$case": "pbr",
-              "pbr": {
-                "albedoColor": {
-                  "r": 0.93,
-                  "g": 0.9,
-                  "b": 0.82,
-                  "a": 1
-                },
-                "metallic": 0,
-                "roughness": 0.85
-              }
-            }
-          }
-        },
-        "1392": {
-          "json": {
-            "material": {
-              "$case": "pbr",
-              "pbr": {
-                "albedoColor": {
-                  "r": 0.78,
-                  "g": 0.74,
-                  "b": 0.65,
-                  "a": 1
-                },
-                "metallic": 0,
-                "roughness": 0.92
-              }
-            }
-          }
         }
       }
     },
@@ -48445,28 +48307,6 @@
             "mesh": {
               "$case": "sphere",
               "sphere": {}
-            }
-          }
-        },
-        "1389": {
-          "json": {
-            "mesh": {
-              "$case": "cylinder",
-              "cylinder": {
-                "radiusTop": 0.45,
-                "radiusBottom": 0.5
-              }
-            }
-          }
-        },
-        "1392": {
-          "json": {
-            "mesh": {
-              "$case": "cylinder",
-              "cylinder": {
-                "radiusTop": 0.5,
-                "radiusBottom": 0.5
-              }
             }
           }
         }

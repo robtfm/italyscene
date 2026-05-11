@@ -262,9 +262,19 @@ function applyBuildingVisual(
     if (t) {
       t.position.y =
         cfg.buriedY + (cfg.fullY - cfg.buriedY) * state.riseProgress
-      t.scale.y =
+      const scaleFactor =
         cfg.buriedScaleY +
         (cfg.fullScaleY - cfg.buriedScaleY) * state.riseProgress
+      if (cfg.programmaticSpawn?.glbSrc) {
+        // GLB: scale uniformly so the model doesn't stretch on rise.
+        const base = cfg.programmaticSpawn.glbScale ?? 1
+        t.scale.x = base * scaleFactor
+        t.scale.y = base * scaleFactor
+        t.scale.z = base * scaleFactor
+      } else {
+        // Primitive: only Y stretches; X/Z stay at their spawn footprint.
+        t.scale.y = scaleFactor
+      }
     }
   }
 

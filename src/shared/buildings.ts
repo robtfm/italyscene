@@ -20,13 +20,17 @@ export type BuildingConfig = {
   collapseSinkDistance: number
   riseStartLeanProgress: number
   naturalLeanDeg: number
-  // Optional programmatic-spawn parameters. Set for buildings NOT in
-  // main.composite — both server and client will create the cylinder
-  // primitive at scene init.
+  // Programmatic-spawn parameters. Both server and client create the visual
+  // at scene init (any composite-loaded entity with the same name is removed
+  // first so the GLB/primitive can take its place cleanly).
+  //   glbSrc → load a GLB; the building scales uniformly on rise.
+  //   otherwise → cylinder/box primitive; only Y stretches on rise.
   programmaticSpawn?: {
     position: { x: number; y: number; z: number }
-    cylinderRadius: number
-    color: { r: number; g: number; b: number }
+    yawDeg?: number // rotation around Y axis (degrees), applied on the visible
+    pitchDeg?: number // rotation around X axis (compensates baked-in tilts)
+    glbSrc: string
+    glbScale?: number // uniform multiplier (default 1)
   }
 }
 
@@ -41,10 +45,10 @@ export const PISA: BuildingConfig = {
   leanSign: -1,
   collapseAngleDeg: 30,
   brickStraightenDeg: 4,
-  buriedY: -0.5,
-  fullY: 9,
-  buriedScaleY: 3,
-  fullScaleY: 18,
+  buriedY: -16.5,
+  fullY: 12.5, // -1m sink, scaled with 1.5×
+  buriedScaleY: 0.2,
+  fullScaleY: 1.0,
   collapseAngleEnd: 85,
   collapseAnimDuration: 1.5,
   collapseHoldDuration: 0.5,
@@ -52,6 +56,13 @@ export const PISA: BuildingConfig = {
   collapseSinkDistance: 10,
   riseStartLeanProgress: 0.5,
   naturalLeanDeg: 4,
+  programmaticSpawn: {
+    position: { x: 40, y: 3, z: 40 },
+    glbSrc: 'assets/Models/buildings/pisa.glb',
+    glbScale: 27, // 1.5× of prior 18
+    pitchDeg: 10, // model has baked-in lean; counter-rotate around +X
+
+  },
 }
 
 export const COLOSSEUM: BuildingConfig = {
@@ -65,10 +76,10 @@ export const COLOSSEUM: BuildingConfig = {
   leanSign: 1,
   collapseAngleDeg: 25,
   brickStraightenDeg: 4.2,
-  buriedY: -0.5,
-  fullY: 4,
-  buriedScaleY: 2,
-  fullScaleY: 8,
+  buriedY: -4.3,
+  fullY: 0.86,
+  buriedScaleY: 0.2,
+  fullScaleY: 1.0,
   collapseAngleEnd: 70,
   collapseAnimDuration: 1.8,
   collapseHoldDuration: 0.5,
@@ -76,6 +87,13 @@ export const COLOSSEUM: BuildingConfig = {
   collapseSinkDistance: 9,
   riseStartLeanProgress: 0.5,
   naturalLeanDeg: 0,
+  programmaticSpawn: {
+    position: { x: 40, y: 3, z: 15 },
+    yawDeg: 0,
+    glbSrc: 'assets/Models/buildings/colosseum.glb',
+    glbScale: 6, // native ~4m wide (internal 100× scale); target ~24m
+
+  },
 }
 
 export const DUOMO: BuildingConfig = {
@@ -89,10 +107,10 @@ export const DUOMO: BuildingConfig = {
   leanSign: 1,
   collapseAngleDeg: 22,
   brickStraightenDeg: 3.0,
-  buriedY: -0.5,
-  fullY: 5,
-  buriedScaleY: 2.5,
-  fullScaleY: 12,
+  buriedY: -21,
+  fullY: 0.55,
+  buriedScaleY: 0.2,
+  fullScaleY: 1.0,
   collapseAngleEnd: 65,
   collapseAnimDuration: 1.6,
   collapseHoldDuration: 0.5,
@@ -101,9 +119,11 @@ export const DUOMO: BuildingConfig = {
   riseStartLeanProgress: 0.5,
   naturalLeanDeg: 1,
   programmaticSpawn: {
-    position: { x: 55, y: 3.5, z: 35 },
-    cylinderRadius: 4,
-    color: { r: 0.85, g: 0.55, b: 0.4 }, // terracotta
+    position: { x: 62, y: 3.5, z: 43 },
+    yawDeg: 0, // 9 o'clock rotation baked into the GLB root node
+    glbSrc: 'assets/Models/buildings/duomo.glb',
+    glbScale: 0.004, // 80% of prior 0.005; ~15m tall
+
   },
 }
 
@@ -118,10 +138,10 @@ export const PANTHEON: BuildingConfig = {
   leanSign: -1,
   collapseAngleDeg: 20,
   brickStraightenDeg: 1.8,
-  buriedY: -0.5,
-  fullY: 4,
-  buriedScaleY: 2,
-  fullScaleY: 9,
+  buriedY: -7.2,
+  fullY: 0.1,
+  buriedScaleY: 0.2,
+  fullScaleY: 1.0,
   collapseAngleEnd: 60,
   collapseAnimDuration: 1.8,
   collapseHoldDuration: 0.5,
@@ -130,9 +150,11 @@ export const PANTHEON: BuildingConfig = {
   riseStartLeanProgress: 0.5,
   naturalLeanDeg: 0,
   programmaticSpawn: {
-    position: { x: 15, y: 3, z: 50 },
-    cylinderRadius: 5,
-    color: { r: 0.92, g: 0.86, b: 0.7 }, // travertine beige
+    position: { x: 17, y: 3, z: 52 },
+    yawDeg: 120, // faces 4 o'clock
+    glbSrc: 'assets/Models/buildings/pantheon.glb',
+    glbScale: 0.0048, // dome-node scale (1500/500) baked in; native span ~1650; target ~8m
+
   },
 }
 
@@ -147,10 +169,10 @@ export const TREVI: BuildingConfig = {
   leanSign: -1,
   collapseAngleDeg: 18,
   brickStraightenDeg: 3.0,
-  buriedY: -0.5,
-  fullY: 6,
-  buriedScaleY: 2.5,
-  fullScaleY: 13,
+  buriedY: -6.5,
+  fullY: 1.94,
+  buriedScaleY: 0.2,
+  fullScaleY: 1.0,
   collapseAngleEnd: 55,
   collapseAnimDuration: 1.5,
   collapseHoldDuration: 0.5,
@@ -159,9 +181,10 @@ export const TREVI: BuildingConfig = {
   riseStartLeanProgress: 0.5,
   naturalLeanDeg: 2,
   programmaticSpawn: {
-    position: { x: 50, y: 3.5, z: 70 },
-    cylinderRadius: 3.5,
-    color: { r: 0.96, g: 0.95, b: 0.92 }, // white marble
+    position: { x: 50, y: 3.5, z: 60 },
+    glbSrc: 'assets/Models/buildings/trevi.glb',
+    glbScale: 10, // native ~2m; target ~20m
+
   },
 }
 
@@ -176,10 +199,10 @@ export const DOGES_PALACE: BuildingConfig = {
   leanSign: 1,
   collapseAngleDeg: 16,
   brickStraightenDeg: 2.0,
-  buriedY: -0.5,
-  fullY: 3.5,
-  buriedScaleY: 1.5,
-  fullScaleY: 7,
+  buriedY: -19.8,
+  fullY: -1,
+  buriedScaleY: 0.2,
+  fullScaleY: 1.0,
   collapseAngleEnd: 50,
   collapseAnimDuration: 2.0,
   collapseHoldDuration: 0.5,
@@ -189,8 +212,9 @@ export const DOGES_PALACE: BuildingConfig = {
   naturalLeanDeg: 0,
   programmaticSpawn: {
     position: { x: 15, y: 3, z: 25 },
-    cylinderRadius: 6,
-    color: { r: 0.95, g: 0.78, b: 0.78 }, // Venetian pink
+    yawDeg: 60, // faces 2 o'clock
+    glbSrc: 'assets/Models/buildings/doges.glb',
+    glbScale: 1.5,
   },
 }
 
