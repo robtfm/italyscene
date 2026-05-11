@@ -104,10 +104,13 @@ export function pickupRadius(personalLevel: number): number {
   return PICKUP_RADIUS_BASE + Math.min(personalLevel, PICKUP_RADIUS_MAX_LEVEL)
 }
 
-// Supply Lines (world-wide). Asymptotic: interval × 1/(1 + 0.15*L). L=10 →
-// 0.40×, L=50 → 0.12×, never reaches 0.
+// Supply Lines (world-wide). Anchored at effective=1 = no scaling (solo L0
+// gets +1 to its harmonic contribution on the server side, so solo L0 →
+// effective=1 → 1.0× → base 5 s interval). Each effective level past 1
+// shaves more time off: scale = 1 / (1 + 0.25 × (eff − 1)).
+//   eff=2 → 0.80×, eff=5 → 0.50×, eff=10 → 0.31×.
 export function spawnIntervalScale(effectiveLevel: number): number {
-  return 1 / (1 + 0.15 * Math.max(0, effectiveLevel))
+  return 1 / (1 + 0.25 * Math.max(0, effectiveLevel - 1))
 }
 
 // Scaffolding (world-wide). Asymptotic lean-rate scaler with the same shape.
@@ -187,7 +190,7 @@ const UPGRADE_COST_MULTIPLIERS: Record<string, number> = {
   pickupRadiusLevel: 0.6, // pure quality-of-life
 }
 
-const UPGRADE_COST_BASE = 100
+const UPGRADE_COST_BASE = 50
 const UPGRADE_COST_GROWTH = 3.0
 
 // Cost of advancing FROM level (level) TO level (level+1). Exponential —

@@ -716,7 +716,10 @@ async function recomputeEffectiveLevelAsync() {
     players.push({ rawAddress: identity.address, profile })
   }
   const mb = players.map((p) => p.profile.multiBricksLevel)
-  const fs = players.map((p) => p.profile.fasterSpawnsLevel)
+  // Supply Lines uses (level + 1) per player so each player contributes at
+  // least 1 to the harmonic stack — gives a meaningful per-player boost
+  // independent of upgrade level (and still diminishes via harmonic decay).
+  const fs = players.map((p) => p.profile.fasterSpawnsLevel + 1)
   const ld = players.map((p) => p.profile.leanDampenerLevel)
   const sf = players.map((p) => p.profile.sturdyFoundationLevel)
   const pt = players.map((p) => p.profile.plumbTeacherLevel)
