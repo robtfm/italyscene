@@ -90,6 +90,24 @@ export const Messages = {
     prestigeLevel: Schemas.Int,
     advancesJson: Schemas.String,
   }),
+  // Client -> server: open the leaderboard modal and request snapshot for
+  // this category. Category ids: 'total', 'bricks', 'building:<entityName>',
+  // 'skill:<levelKey>'.
+  leaderboardRequest: Schemas.Map({
+    category: Schemas.String,
+    ts: Schemas.Int,
+  }),
+  // Server -> caller: top-10 entries plus the caller's own rank/score. rank
+  // is 0-indexed (0 = first place); −1 means "outside top 10". entriesJson
+  // is a JSON array of { address, score, achievedAt }.
+  leaderboardSnapshot: Schemas.Map({
+    category: Schemas.String,
+    entriesJson: Schemas.String,
+    myRank: Schemas.Int,
+    myScore: Schemas.Int,
+    myName: Schemas.String,
+    myAvatarUrl: Schemas.String,
+  }),
 }
 
 export const room = registerMessages(Messages)

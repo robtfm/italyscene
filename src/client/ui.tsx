@@ -1,4 +1,10 @@
-import { engine, PrimaryPointerInfo, RealmInfo, Transform } from '@dcl/sdk/ecs'
+import {
+  engine,
+  PlayerIdentityData,
+  PrimaryPointerInfo,
+  RealmInfo,
+  Transform,
+} from '@dcl/sdk/ecs'
 import { Color4 } from '@dcl/sdk/math'
 import ReactEcs, {
   Button,
@@ -40,6 +46,7 @@ import {
 } from '../shared/upgrades'
 import { BUILDING_CONFIGS } from '../shared/buildings'
 import { clearPopup, getPopup } from './popup-state'
+import { getLeaderboardSnapshot } from './leaderboard-state'
 
 const COMPLETION_CELEBRATION_S = 10
 
@@ -53,6 +60,12 @@ const parchment = Color4.fromHexString('#e0d0a0ff')
 
 let skillTreeOpen = false
 let statsOpen = false
+let leaderboardOpen = false
+type LBKind = 'total' | 'building' | 'bricks' | 'skill'
+let leaderboardKind: LBKind = 'total'
+// Default sub-selections for the building / skill kinds.
+let leaderboardSubBuilding = 'TowerOfPisa'
+let leaderboardSubSkill = 'multiBricksLevel'
 // Renaissance allocation modal — when open, holds the player's draft of
 // perk allocations they're about to commit. Initialised from their current
 // perkPoints when the modal opens.
@@ -155,6 +168,48 @@ function acknowledgePrestigeBenefits() {
 
 function isPreviewRealm(): boolean {
   return RealmInfo.getOrNull(engine.RootEntity)?.isPreview ?? false
+}
+
+function currentLeaderboardCategory(): string {
+  switch (leaderboardKind) {
+    case 'total':
+      return 'total'
+    case 'bricks':
+      return 'bricks'
+    case 'building':
+      return `building:${leaderboardSubBuilding}`
+    case 'skill':
+      return `skill:${leaderboardSubSkill}`
+  }
+}
+
+function requestLeaderboard(category: string) {
+  room.send('leaderboardRequest', { category, ts: Date.now() })
+}
+
+function openLeaderboard() {
+  leaderboardOpen = true
+  requestLeaderboard(currentLeaderboardCategory())
+}
+
+function selectLeaderboardKind(kind: LBKind) {
+  leaderboardKind = kind
+  requestLeaderboard(currentLeaderboardCategory())
+}
+
+function selectLeaderboardSubBuilding(entityName: string) {
+  leaderboardSubBuilding = entityName
+  requestLeaderboard(`building:${entityName}`)
+}
+
+function selectLeaderboardSubSkill(levelKey: string) {
+  leaderboardSubSkill = levelKey
+  requestLeaderboard(`skill:${levelKey}`)
+}
+
+function truncatedAddress(addr: string): string {
+  if (addr.length <= 12) return addr
+  return `${addr.slice(0, 6)}…${addr.slice(-4)}`
 }
 
 
@@ -387,6 +442,7 @@ const uiComponent = () => (
     {skillTreeOpen ? skillTreeModal() : null}
     {statsOpen ? statsModal() : null}
     {renaissanceOpen ? renaissanceModal() : null}
+    {leaderboardOpen ? leaderboardModal() : null}
     {getPopup() ? popupToast() : null}
   </UiEntity>
 )
@@ -658,6 +714,344 @@ function perkAllocRow(opts: {
           renaissanceDraft[opts.levelKey] = opts.current + 1
         },
       })}
+    </UiEntity>
+  )
+}
+
+// Same level-keys list used elsewhere, just the order in which the skill
+// leaderboard tabs appear.
+const LB_SKILL_KEYS: string[] = [
+  'multiBricksLevel',
+  'pickupRadiusLevel',
+  'fasterSpawnsLevel',
+  'leanDampenerLevel',
+  'sturdyFoundationLevel',
+  'plumbLineLevel',
+  'plumbTeacherLevel',
+  'generousLevel',
+  'generousTeacherLevel',
+  'stockpileLevel',
+  'titheLevel',
+]
+const LB_SKILL_INFO_KEY: Record<string, string> = {
+  multiBricksLevel: 'multiBricks',
+  pickupRadiusLevel: 'pickupRadius',
+  fasterSpawnsLevel: 'fasterSpawns',
+  leanDampenerLevel: 'leanDampener',
+  sturdyFoundationLevel: 'sturdyFoundation',
+  plumbLineLevel: 'plumbLine',
+  plumbTeacherLevel: 'plumbTeacher',
+  generousLevel: 'generous',
+  generousTeacherLevel: 'generousTeacher',
+  stockpileLevel: 'stockpile',
+  titheLevel: 'tithe',
+}
+
+function leaderboardTitle(): string {
+  switch (leaderboardKind) {
+    case 'total':
+      return 'Builder ranks (sum of building levels)'
+    case 'bricks':
+      return 'All-time bricks contributed'
+    case 'building': {
+      const cfg = BUILDING_CONFIGS.find(
+        (c) => c.entityName === leaderboardSubBuilding
+      )
+      return `${cfg?.displayName ?? leaderboardSubBuilding} — best builder level`
+    }
+    case 'skill': {
+      const infoKey = LB_SKILL_INFO_KEY[leaderboardSubSkill]
+      const info = infoKey ? UPGRADE_INFO[infoKey] : undefined
+      return `${info?.title ?? leaderboardSubSkill} — peak skill level`
+    }
+  }
+}
+
+function leaderboardModal() {
+  const myAddress =
+    PlayerIdentityData.getOrNull(engine.PlayerEntity)?.address?.toLowerCase() ??
+    ''
+  const category = currentLeaderboardCategory()
+  const snap = getLeaderboardSnapshot(category)
+  return (
+    <UiEntity
+      uiTransform={{
+        positionType: 'absolute',
+        width: '100%',
+        height: '100%',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 120,
+      }}
+      uiBackground={{ color: panelBlack }}
+      onMouseDown={() => {
+        leaderboardOpen = false
+      }}
+    >
+      <UiEntity
+        uiTransform={{ width: 560 }}
+        onMouseDown={() => {
+          /* swallow click */
+        }}
+      >
+        {framedPanel({
+          width: '100%',
+          padding: 12,
+          children: (
+            <UiEntity
+              uiTransform={{ width: '100%', flexDirection: 'column' }}
+            >
+              <Label
+                value="Leaderboards"
+                fontSize={18}
+                color={black}
+                uiTransform={{ width: '100%', height: 26 }}
+                textAlign="middle-center"
+              />
+              {/* Top tabs */}
+              <UiEntity
+                uiTransform={{
+                  width: '100%',
+                  flexDirection: 'row',
+                  justifyContent: 'space-between',
+                  margin: '6px 0 0 0',
+                }}
+              >
+                {leaderboardTabButton('Total', 'total')}
+                {leaderboardTabButton('Building', 'building')}
+                {leaderboardTabButton('Bricks', 'bricks')}
+                {leaderboardTabButton('Skill', 'skill')}
+              </UiEntity>
+              {/* Sub-picker (only for building / skill) */}
+              {leaderboardKind === 'building' ? (
+                <UiEntity
+                  uiTransform={{
+                    width: '100%',
+                    flexDirection: 'row',
+                    flexWrap: 'wrap',
+                    margin: '6px 0 0 0',
+                  }}
+                >
+                  {BUILDING_CONFIGS.map((cfg) =>
+                    leaderboardSubButton(
+                      cfg.displayName,
+                      cfg.entityName === leaderboardSubBuilding,
+                      () => selectLeaderboardSubBuilding(cfg.entityName)
+                    )
+                  )}
+                </UiEntity>
+              ) : null}
+              {leaderboardKind === 'skill' ? (
+                <UiEntity
+                  uiTransform={{
+                    width: '100%',
+                    flexDirection: 'row',
+                    flexWrap: 'wrap',
+                    margin: '6px 0 0 0',
+                  }}
+                >
+                  {LB_SKILL_KEYS.map((key) => {
+                    const infoKey = LB_SKILL_INFO_KEY[key]
+                    const title = infoKey ? UPGRADE_INFO[infoKey].title : key
+                    return leaderboardSubButton(
+                      title,
+                      key === leaderboardSubSkill,
+                      () => selectLeaderboardSubSkill(key)
+                    )
+                  })}
+                </UiEntity>
+              ) : null}
+              {/* Title */}
+              <Label
+                value={leaderboardTitle()}
+                fontSize={12}
+                color={Color4.create(0, 0, 0, 0.7)}
+                uiTransform={{ width: '100%', height: 20, margin: '8px 0 4px 0' }}
+                textAlign="middle-center"
+              />
+              {/* Body */}
+              {leaderboardBody(snap, myAddress)}
+              {/* Close */}
+              <UiEntity
+                uiTransform={{
+                  width: '100%',
+                  flexDirection: 'row',
+                  justifyContent: 'center',
+                  margin: '12px 0 0 0',
+                }}
+              >
+                {roundedButton({
+                  value: 'Close',
+                  variant: 'secondary',
+                  width: 120,
+                  height: 28,
+                  onMouseDown: () => {
+                    leaderboardOpen = false
+                  },
+                })}
+              </UiEntity>
+            </UiEntity>
+          ),
+        })}
+      </UiEntity>
+    </UiEntity>
+  )
+}
+
+function leaderboardTabButton(label: string, kind: LBKind) {
+  const active = leaderboardKind === kind
+  return roundedButton({
+    value: label,
+    variant: active ? 'primary' : 'secondary',
+    width: 120,
+    height: 26,
+    fontSize: 12,
+    onMouseDown: () => selectLeaderboardKind(kind),
+  })
+}
+
+function leaderboardSubButton(
+  label: string,
+  active: boolean,
+  onMouseDown: () => void
+) {
+  return roundedButton({
+    value: label,
+    variant: active ? 'primary' : 'secondary',
+    width: 130,
+    height: 22,
+    margin: '2px 3px',
+    fontSize: 11,
+    onMouseDown,
+  })
+}
+
+function leaderboardBody(
+  snap: ReturnType<typeof getLeaderboardSnapshot>,
+  myAddress: string
+) {
+  if (!snap) {
+    return (
+      <Label
+        value="Loading…"
+        fontSize={12}
+        color={Color4.create(0, 0, 0, 0.7)}
+        uiTransform={{ width: '100%', height: 40, margin: '8px 0' }}
+        textAlign="middle-center"
+      />
+    )
+  }
+  const rows: any[] = []
+  for (let i = 0; i < snap.entries.length; i++) {
+    const e = snap.entries[i]
+    rows.push(
+      leaderboardRow({
+        rank: i + 1,
+        address: e.address,
+        name: e.name,
+        avatarUrl: e.avatarUrl,
+        score: e.score,
+        you: e.address.toLowerCase() === myAddress,
+      })
+    )
+  }
+  // If the caller isn't in the top 10, append a separator + their row.
+  if (snap.myRank < 0 && myAddress) {
+    rows.push(
+      <Label
+        key="lb-sep"
+        value="…"
+        fontSize={14}
+        color={Color4.create(0, 0, 0, 0.5)}
+        uiTransform={{ width: '100%', height: 18, margin: '4px 0 0 0' }}
+        textAlign="middle-center"
+      />
+    )
+    rows.push(
+      leaderboardRow({
+        rank: 0,
+        address: myAddress,
+        name: snap.myName,
+        avatarUrl: snap.myAvatarUrl,
+        score: snap.myScore,
+        you: true,
+      })
+    )
+  }
+  return (
+    <UiEntity
+      uiTransform={{ width: '100%', flexDirection: 'column' }}
+    >
+      {rows}
+    </UiEntity>
+  )
+}
+
+function leaderboardRow(opts: {
+  rank: number
+  address: string
+  name?: string
+  avatarUrl?: string
+  score: number
+  you: boolean
+}) {
+  const rankText = opts.rank > 0 ? `${opts.rank}.` : '—'
+  const display = opts.name && opts.name.length > 0
+    ? opts.name
+    : truncatedAddress(opts.address)
+  return (
+    <UiEntity
+      uiTransform={{
+        width: '100%',
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 4,
+        margin: '2px 0',
+        borderRadius: 4,
+        height: 36,
+      }}
+      uiBackground={{
+        color: opts.you
+          ? Color4.create(0.8, 0.2, 0.2, 0.18)
+          : Color4.create(0, 0, 0, 0.05),
+      }}
+    >
+      <Label
+        value={rankText}
+        fontSize={13}
+        color={opts.you ? piazzaRed : black}
+        uiTransform={{ width: '10%', height: 28 }}
+        textAlign="middle-center"
+      />
+      <UiEntity
+        uiTransform={{
+          width: 28,
+          height: 28,
+          margin: '0 6px 0 0',
+          borderRadius: 14,
+        }}
+        uiBackground={
+          opts.avatarUrl && opts.avatarUrl.length > 0
+            ? {
+                texture: { src: opts.avatarUrl },
+                textureMode: 'stretch',
+              }
+            : { color: Color4.create(0, 0, 0, 0.15) }
+        }
+      />
+      <Label
+        value={display}
+        fontSize={13}
+        color={opts.you ? piazzaRed : black}
+        uiTransform={{ width: '55%', height: 28 }}
+      />
+      <Label
+        value={opts.score.toLocaleString()}
+        fontSize={13}
+        color={opts.you ? piazzaRed : black}
+        uiTransform={{ width: '25%', height: 28 }}
+        textAlign="middle-right"
+      />
     </UiEntity>
   )
 }
@@ -1148,6 +1542,17 @@ function bottomActions() {
         onMouseDown: () => {
           acknowledgePrestigeBenefits()
           statsOpen = true
+        },
+      })}
+      {roundedButton({
+        value: 'Leaderboard',
+        variant: 'secondary',
+        width: 150,
+        height: 32,
+        margin: '0 4px',
+        fontSize: 13,
+        onMouseDown: () => {
+          openLeaderboard()
         },
       })}
       {isPreviewRealm()

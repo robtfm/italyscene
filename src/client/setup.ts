@@ -22,6 +22,7 @@ import { setupFlyingBricks } from './flying-bricks'
 import { brickPositions } from './brick-state'
 import { setupEffects } from './effects'
 import { showBuildingAdvance, showPrestigeResult } from './popup-state'
+import { setLeaderboardSnapshot } from './leaderboard-state'
 import { pickupRadius } from '../shared/upgrades'
 
 const handledBricks = new Set<Entity>()
@@ -110,6 +111,22 @@ export function initClient() {
   })
   room.onMessage('prestigeResult', (data) => {
     showPrestigeResult(data.prestigeLevel, data.advancesJson)
+  })
+  room.onMessage('leaderboardSnapshot', (data) => {
+    try {
+      const entries = JSON.parse(data.entriesJson)
+      setLeaderboardSnapshot({
+        category: data.category,
+        entries: Array.isArray(entries) ? entries : [],
+        myRank: data.myRank,
+        myScore: data.myScore,
+        myName: data.myName,
+        myAvatarUrl: data.myAvatarUrl,
+        fetchedAt: Date.now(),
+      })
+    } catch {
+      // ignore malformed payloads
+    }
   })
   room.onMessage('myStatsUpdate', (data) => {
     const prevRadiusLevel = myStats.pickupRadiusLevel

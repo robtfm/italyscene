@@ -13,6 +13,7 @@ import {
 import { Color4, Quaternion } from '@dcl/sdk/math'
 import { syncEntity } from '@dcl/sdk/network'
 import { Storage } from '@dcl/sdk/server'
+import { signedFetch } from '~system/SignedFetch'
 import { Brick, BuildingState, WorldState } from '../shared/schemas'
 import { room } from '../shared/messages'
 import {
@@ -78,6 +79,10 @@ type PlayerProfile = {
   // of floor(sum(maxBuildingLevel) / 3) points. Reset upgrade levels seed
   // from these. Costs use (totalLevel - perkPoints[key]).
   perkPoints: Record<string, number>
+  // Lifetime counters that never reset on Renaissance — power the all-time
+  // leaderboards.
+  bricksContributedAllTime: number
+  peakSkillLevel: Record<string, number>
   bricksSpent: number
   // Pity counter: +1 per pick where the rolled building's level wouldn't
   // advance this player's availableBuildings (or unlock something they want).
@@ -97,6 +102,210 @@ type PlayerProfile = {
   titheLevel: number
 }
 const PROFILE_KEY = 'profile'
+const LEADERBOARD_KEY = 'leaderboards'
+const LEADERBOARD_TOP = 10
+
+// Single leaderboard entry. Tie-breaker: earlier achievedAt wins.
+type LBEntry = { address: string; score: number; achievedAt: number }
+// All categories live in one in-memory map (category id → top10 entries
+// sorted desc by score, asc by achievedAt). Persisted as a single JSON blob
+// in scene storage so a server restart can reload it.
+const leaderboards = new Map<string, LBEntry[]>()
+let leaderboardsLoaded = false
+
+function leaderboardCategories(): string[] {
+  const out: string[] = ['total', 'bricks']
+  for (const cfg of BUILDING_CONFIGS) out.push(`building:${cfg.entityName}`)
+  for (const k of UPGRADE_KEYS) out.push(`skill:${k}`)
+  return out
+}
+
+async function loadLeaderboards() {
+  if (leaderboardsLoaded) return
+  try {
+    const raw = await Storage.get<string>(LEADERBOARD_KEY)
+    if (raw) {
+      const parsed = JSON.parse(raw)
+      if (parsed && typeof parsed === 'object') {
+        for (const cat of Object.keys(parsed)) {
+          const arr = parsed[cat]
+          if (Array.isArray(arr)) leaderboards.set(cat, arr)
+        }
+      }
+    }
+  } catch (e) {
+    console.log('[SERVER] loadLeaderboards error', e)
+  }
+  leaderboardsLoaded = true
+}
+
+function saveLeaderboards() {
+  const obj: Record<string, LBEntry[]> = {}
+  for (const [k, v] of leaderboards) obj[k] = v
+  void Storage.set(LEADERBOARD_KEY, JSON.stringify(obj))
+}
+
+function lbCompare(a: LBEntry, b: LBEntry): number {
+  if (b.score !== a.score) return b.score - a.score
+  return a.achievedAt - b.achievedAt
+}
+
+// Try to seat `address`'s new score in the top 10 for `category`. Monotonic
+// scores assumed (we never lower an entry). Returns true if the top10 was
+// modified so the caller can schedule a save.
+function updateLeaderboard(
+  category: string,
+  address: string,
+  score: number,
+  achievedAt: number
+): boolean {
+  const list = leaderboards.get(category) ?? []
+  const existingIdx = list.findIndex((e) => e.address === address)
+  if (existingIdx >= 0) {
+    const existing = list[existingIdx]
+    if (score <= existing.score) return false
+    existing.score = score
+    existing.achievedAt = achievedAt
+    list.sort(lbCompare)
+    leaderboards.set(category, list)
+    return true
+  }
+  // No existing entry: only insert if we beat the bottom of a full top10.
+  if (list.length >= LEADERBOARD_TOP) {
+    const last = list[list.length - 1]
+    if (score < last.score) return false
+    if (score === last.score && achievedAt >= last.achievedAt) return false
+  }
+  list.push({ address, score, achievedAt })
+  list.sort(lbCompare)
+  if (list.length > LEADERBOARD_TOP) list.length = LEADERBOARD_TOP
+  leaderboards.set(category, list)
+  return true
+}
+
+// Snapshot of every category-score for one player; used for the "did anything
+// change" check after an event. Computed lazily — we only update categories
+// whose score actually moved.
+function playerScoresAfter(
+  profile: PlayerProfile
+): Record<string, number> {
+  const out: Record<string, number> = {}
+  let total = 0
+  for (const cfg of BUILDING_CONFIGS) {
+    const v = profile.maxBuildingLevel[cfg.entityName] ?? 0
+    total += v
+    out[`building:${cfg.entityName}`] = v
+  }
+  out['total'] = total
+  out['bricks'] = profile.bricksContributedAllTime ?? 0
+  for (const k of UPGRADE_KEYS) {
+    out[`skill:${k}`] = profile.peakSkillLevel?.[k] ?? 0
+  }
+  return out
+}
+
+// Decentraland profile cache: address (lowercased) → resolved display info.
+// We fetch from the Catalyst lambdas the first time we need a profile, then
+// keep it in memory until restart. avatarUrl falls back to '' when the user
+// has never set a custom avatar.
+type ProfileInfo = { name: string; avatarUrl: string }
+const profileCache = new Map<string, ProfileInfo>()
+const PROFILE_LAMBDAS_BASE =
+  'https://peer.decentraland.org/lambdas/profiles'
+
+async function fetchProfileInfo(address: string): Promise<ProfileInfo> {
+  const key = address.toLowerCase()
+  const cached = profileCache.get(key)
+  if (cached) return cached
+  try {
+    const url = `${PROFILE_LAMBDAS_BASE}/${encodeURIComponent(key)}`
+    const res = await signedFetch({ url, init: { method: 'GET', headers: {} } })
+    if (res.body) {
+      const parsed = JSON.parse(res.body)
+      const avatar = parsed?.avatars?.[0]
+      if (avatar) {
+        const snapshots = avatar.avatar?.snapshots ?? {}
+        const info: ProfileInfo = {
+          name: avatar.name ?? '',
+          avatarUrl: snapshots.face256 ?? snapshots.face ?? '',
+        }
+        profileCache.set(key, info)
+        return info
+      }
+    }
+  } catch (e) {
+    console.log('[SERVER] profile lookup failed for', key, e)
+  }
+  const empty: ProfileInfo = { name: '', avatarUrl: '' }
+  profileCache.set(key, empty)
+  return empty
+}
+
+async function handleLeaderboardRequest(rawAddress: string, category: string) {
+  await loadLeaderboards()
+  const address = rawAddress.toLowerCase()
+  const profile = await ensureProfile(address)
+  const entries = leaderboards.get(category) ?? []
+  const scores = playerScoresAfter(profile)
+  const myScore = scores[category] ?? 0
+  // Rank inside top10 if we find ourselves there; otherwise -1 (UI can show
+  // "outside top 10"). Note: scores tied with you that hit top10 before you
+  // outrank you, matching how updateLeaderboard seats entries.
+  let myRank = -1
+  for (let i = 0; i < entries.length; i++) {
+    if (entries[i].address === address) {
+      myRank = i
+      break
+    }
+  }
+  // Resolve display names + avatar URLs for every address in the response,
+  // including the caller (used for the inline "your" row when outside top 10).
+  const addresses = new Set<string>(entries.map((e) => e.address))
+  addresses.add(address)
+  const profiles: Record<string, ProfileInfo> = {}
+  await Promise.all(
+    [...addresses].map(async (a) => {
+      profiles[a] = await fetchProfileInfo(a)
+    })
+  )
+  const enriched = entries.map((e) => ({
+    address: e.address,
+    score: e.score,
+    achievedAt: e.achievedAt,
+    name: profiles[e.address]?.name ?? '',
+    avatarUrl: profiles[e.address]?.avatarUrl ?? '',
+  }))
+  const me = profiles[address] ?? { name: '', avatarUrl: '' }
+  room.send(
+    'leaderboardSnapshot',
+    {
+      category,
+      entriesJson: JSON.stringify(enriched),
+      myRank,
+      myScore,
+      myName: me.name,
+      myAvatarUrl: me.avatarUrl,
+    },
+    { to: [rawAddress] }
+  )
+}
+
+async function maybeUpdateLeaderboards(
+  rawAddress: string,
+  profile: PlayerProfile
+) {
+  await loadLeaderboards()
+  const address = rawAddress.toLowerCase()
+  const scores = playerScoresAfter(profile)
+  const now = Date.now()
+  let dirty = false
+  for (const cat of leaderboardCategories()) {
+    const score = scores[cat] ?? 0
+    if (score <= 0) continue
+    if (updateLeaderboard(cat, address, score, now)) dirty = true
+  }
+  if (dirty) saveLeaderboards()
+}
 const WORLD_KEY = 'worldState'
 const COMPLETION_CELEBRATION_S = 10
 const WORLD_SAVE_INTERVAL_S = 3
@@ -131,6 +340,8 @@ function defaultProfile(): PlayerProfile {
     maxBuildingLevel: {},
     prestigedMaxBuildingLevel: {},
     perkPoints: {},
+    bricksContributedAllTime: 0,
+    peakSkillLevel: {},
     bricksSpent: 0,
     pity: 0,
     multiBricksLevel: 0,
@@ -164,6 +375,8 @@ async function loadProfile(address: string): Promise<PlayerProfile> {
           maxBuildingLevel: parsed.maxBuildingLevel ?? {},
           prestigedMaxBuildingLevel: parsed.prestigedMaxBuildingLevel ?? {},
           perkPoints: parsed.perkPoints ?? {},
+          bricksContributedAllTime: parsed.bricksContributedAllTime ?? 0,
+          peakSkillLevel: parsed.peakSkillLevel ?? {},
           bricksSpent: parsed.bricksSpent ?? 0,
           pity: parsed.pity ?? 0,
           multiBricksLevel: parsed.multiBricksLevel ?? 0,
@@ -442,6 +655,9 @@ export async function initServer() {
   room.onMessage('prestige', (data, context) => {
     if (context) void handlePrestige(context.from, data.allocationJson ?? '{}')
   })
+  room.onMessage('leaderboardRequest', (data, context) => {
+    if (context) void handleLeaderboardRequest(context.from, data.category)
+  })
 
   engine.addSystem(brickSpawnSystem)
   engine.addSystem(serverBuildingSystem)
@@ -678,7 +894,23 @@ async function applyBrickAward(playerAddress: string, baseValue: number) {
   )
 
   incrementBrickCount(buildingValue, straightenMultiplier)
+  // All-time leaderboard counter tracks bricks fed into buildings — use the
+  // post-straighten buildingValue (what actually reached the building), not
+  // the personal credit that has tithe + prestige scaling.
+  await bumpBricksContributedAllTime(playerAddress, buildingValue)
   creditPlayer(playerAddress, creditValue)
+}
+
+async function bumpBricksContributedAllTime(
+  rawAddress: string,
+  amount: number
+) {
+  const address = rawAddress.toLowerCase()
+  const profile = await ensureProfile(address)
+  profile.bricksContributedAllTime =
+    (profile.bricksContributedAllTime ?? 0) + amount
+  void saveProfile(address, profile)
+  void maybeUpdateLeaderboards(rawAddress, profile)
 }
 
 async function creditPlayer(rawAddress: string, amount: number) {
@@ -774,7 +1006,14 @@ async function handlePrestige(rawAddress: string, allocationJson: string) {
   profile.availableBuildings = 0
   profile.pity = 0
   // Each upgrade level resets to its perk-allocated starting level.
-  for (const k of UPGRADE_KEYS) profile[k] = cleaned[k] ?? 0
+  for (const k of UPGRADE_KEYS) {
+    profile[k] = cleaned[k] ?? 0
+    // Perks count as having reached that level — pick up the peak.
+    if (!profile.peakSkillLevel) profile.peakSkillLevel = {}
+    if (profile[k] > (profile.peakSkillLevel[k] ?? 0)) {
+      profile.peakSkillLevel[k] = profile[k]
+    }
+  }
   void saveProfile(address, profile)
   sendMyStats(rawAddress, profile)
   room.send(
@@ -785,6 +1024,7 @@ async function handlePrestige(rawAddress: string, allocationJson: string) {
     },
     { to: [rawAddress] }
   )
+  void maybeUpdateLeaderboards(rawAddress, profile)
   console.log('[SERVER]', address, 'prestiged')
 }
 
@@ -799,7 +1039,12 @@ async function handleLevelUp(rawAddress: string, key: UpgradeKey) {
   if (available < cost) return
   profile.bricksSpent += cost
   profile[key] = current + 1
+  if (!profile.peakSkillLevel) profile.peakSkillLevel = {}
+  if (profile[key] > (profile.peakSkillLevel[key] ?? 0)) {
+    profile.peakSkillLevel[key] = profile[key]
+  }
   void saveProfile(address, profile)
+  void maybeUpdateLeaderboards(rawAddress, profile)
   sendMyStats(rawAddress, profile)
   console.log('[SERVER]', address, 'leveled up', key, '->', profile[key])
 }
@@ -949,6 +1194,7 @@ async function handleBuildingCompletion(cfg: BuildingConfig) {
     }
 
     void saveProfile(address, profile)
+    void maybeUpdateLeaderboards(address, profile)
   }
 
   console.log(
