@@ -31,6 +31,7 @@ import {
   isAtEffectiveMax,
   leanRateScale,
   levelUpCost,
+  maxLevelFor,
   plumbLinePersonalBonus,
   plumbLineTeacherBonus,
   rollBrickValue,
@@ -73,6 +74,10 @@ type PlayerProfile = {
   // 2^N personal income multiplier in applyBrickAward — only achievements
   // "banked" via prestige count toward the bonus.
   prestigedMaxBuildingLevel: Record<string, number>
+  // Free starting levels per upgrade, chosen at each Renaissance from a pool
+  // of floor(sum(maxBuildingLevel) / 3) points. Reset upgrade levels seed
+  // from these. Costs use (totalLevel - perkPoints[key]).
+  perkPoints: Record<string, number>
   bricksSpent: number
   // Pity counter: +1 per pick where the rolled building's level wouldn't
   // advance this player's availableBuildings (or unlock something they want).
@@ -125,6 +130,7 @@ function defaultProfile(): PlayerProfile {
     availableBuildings: 0,
     maxBuildingLevel: {},
     prestigedMaxBuildingLevel: {},
+    perkPoints: {},
     bricksSpent: 0,
     pity: 0,
     multiBricksLevel: 0,
@@ -157,6 +163,7 @@ async function loadProfile(address: string): Promise<PlayerProfile> {
           availableBuildings: parsed.availableBuildings ?? legacyAvailable,
           maxBuildingLevel: parsed.maxBuildingLevel ?? {},
           prestigedMaxBuildingLevel: parsed.prestigedMaxBuildingLevel ?? {},
+          perkPoints: parsed.perkPoints ?? {},
           bricksSpent: parsed.bricksSpent ?? 0,
           pity: parsed.pity ?? 0,
           multiBricksLevel: parsed.multiBricksLevel ?? 0,
@@ -349,6 +356,7 @@ function sendMyStats(rawAddress: string, profile: PlayerProfile) {
       prestigedMaxBuildingLevelJson: JSON.stringify(
         profile.prestigedMaxBuildingLevel ?? {}
       ),
+      perkPointsJson: JSON.stringify(profile.perkPoints ?? {}),
       ...next,
     },
     { to: [rawAddress] }
@@ -430,8 +438,8 @@ export async function initServer() {
   room.onMessage('levelUpTithe', (_data, context) => {
     if (context) void handleLevelUp(context.from, 'titheLevel')
   })
-  room.onMessage('prestige', (_data, context) => {
-    if (context) void handlePrestige(context.from)
+  room.onMessage('prestige', (data, context) => {
+    if (context) void handlePrestige(context.from, data.allocationJson ?? '{}')
   })
 
   engine.addSystem(brickSpawnSystem)
@@ -694,9 +702,56 @@ type UpgradeKey =
   | 'stockpileLevel'
   | 'titheLevel'
 
-async function handlePrestige(rawAddress: string) {
+const UPGRADE_KEYS: UpgradeKey[] = [
+  'multiBricksLevel',
+  'pickupRadiusLevel',
+  'fasterSpawnsLevel',
+  'leanDampenerLevel',
+  'sturdyFoundationLevel',
+  'plumbLineLevel',
+  'plumbTeacherLevel',
+  'generousLevel',
+  'generousTeacherLevel',
+  'stockpileLevel',
+  'titheLevel',
+]
+
+function perkPoolFor(profile: PlayerProfile): number {
+  let sum = 0
+  for (const v of Object.values(profile.maxBuildingLevel)) sum += v
+  return Math.floor(sum / 3)
+}
+
+async function handlePrestige(rawAddress: string, allocationJson: string) {
   const address = rawAddress.toLowerCase()
   const profile = await ensureProfile(address)
+  // Sanitise the allocation: known upgrade keys only, non-negative integers,
+  // total within the player's earned pool (floor(sum(maxBuildingLevel)/3)).
+  let raw: Record<string, unknown> = {}
+  try {
+    const parsed = JSON.parse(allocationJson)
+    if (parsed && typeof parsed === 'object') raw = parsed
+  } catch {
+    raw = {}
+  }
+  const pool = perkPoolFor(profile)
+  const cleaned: Record<string, number> = {}
+  let total = 0
+  for (const key of UPGRADE_KEYS) {
+    const v = Number(raw[key] ?? 0)
+    const raw_n = Number.isFinite(v) ? Math.max(0, Math.floor(v)) : 0
+    // Also cap each upgrade at its hard maxLevel (so the player can't perk
+    // past the cap and waste the rest of their pool).
+    const cap = maxLevelFor(key)
+    const n = Math.min(raw_n, cap)
+    cleaned[key] = n
+    total += n
+  }
+  if (total > pool) {
+    // Allocation exceeds budget — reject silently. Client should validate
+    // but enforce server-side too.
+    return
+  }
   // Diff the new snapshot against the previous one so the client popup can
   // call out which buildings actually bumped their income multiplier.
   const prevSnapshot = profile.prestigedMaxBuildingLevel ?? {}
@@ -712,21 +767,13 @@ async function handlePrestige(rawAddress: string) {
   // affect the bonus until the next prestige.
   profile.prestigedMaxBuildingLevel = newSnapshot
   profile.prestigeLevel = (profile.prestigeLevel ?? 0) + 1
+  profile.perkPoints = cleaned
   profile.lifetimeContributions = 0
   profile.bricksSpent = 0
   profile.availableBuildings = 0
   profile.pity = 0
-  profile.multiBricksLevel = 0
-  profile.pickupRadiusLevel = 0
-  profile.fasterSpawnsLevel = 0
-  profile.leanDampenerLevel = 0
-  profile.sturdyFoundationLevel = 0
-  profile.plumbLineLevel = 0
-  profile.plumbTeacherLevel = 0
-  profile.generousLevel = 0
-  profile.generousTeacherLevel = 0
-  profile.stockpileLevel = 0
-  profile.titheLevel = 0
+  // Each upgrade level resets to its perk-allocated starting level.
+  for (const k of UPGRADE_KEYS) profile[k] = cleaned[k] ?? 0
   void saveProfile(address, profile)
   sendMyStats(rawAddress, profile)
   room.send(
@@ -745,7 +792,8 @@ async function handleLevelUp(rawAddress: string, key: UpgradeKey) {
   const profile = await ensureProfile(address)
   const current = profile[key]
   if (isAtEffectiveMax(key, current, profile.maxBuildingLevel)) return
-  const cost = levelUpCost(current, key)
+  const perk = profile.perkPoints?.[key] ?? 0
+  const cost = levelUpCost(Math.max(0, current - perk), key)
   const available = profile.lifetimeContributions - profile.bricksSpent
   if (available < cost) return
   profile.bricksSpent += cost
@@ -973,7 +1021,9 @@ function wantedIndicesFor(
       upgradeKey
     ] as number | undefined
     if (typeof currentLevel !== 'number') continue
-    if (available < levelUpCost(currentLevel, upgradeKey)) continue
+    const perk = profile.perkPoints?.[upgradeKey] ?? 0
+    if (available < levelUpCost(Math.max(0, currentLevel - perk), upgradeKey))
+      continue
     const gate = gateBlockingFor(
       upgradeKey,
       currentLevel,

@@ -51,7 +51,7 @@ export function showPrestigeResult(
   }
   body.push('Upgrades, currency, and unlocked buildings have been reset.')
   active = {
-    title: `Renaissance Lv ${prestigeLevel} achieved!`,
+    title: 'A Renaissance begins',
     body,
   }
 }

@@ -51,6 +51,7 @@ export type MyStats = {
   nextEffectiveStockpileLevel: number
   maxBuildingLevel: Record<string, number>
   prestigedMaxBuildingLevel: Record<string, number>
+  perkPoints: Record<string, number>
 }
 let myStats: MyStats = {
   prestigeLevel: 0,
@@ -76,6 +77,7 @@ let myStats: MyStats = {
   nextEffectiveStockpileLevel: 0,
   maxBuildingLevel: {},
   prestigedMaxBuildingLevel: {},
+  perkPoints: {},
 }
 
 function parseMaxBuildingLevel(raw: string): Record<string, number> {
@@ -135,6 +137,7 @@ export function initClient() {
       prestigedMaxBuildingLevel: parseMaxBuildingLevel(
         data.prestigedMaxBuildingLevelJson
       ),
+      perkPoints: parseMaxBuildingLevel(data.perkPointsJson),
     }
     if (data.pickupRadiusLevel !== prevRadiusLevel) {
       // Re-register all brick proximity handlers with the new radius.

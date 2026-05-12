@@ -46,6 +46,10 @@ export const Messages = {
     // JSON-encoded snapshot taken at last prestige; drives the 2^N
     // personal income multiplier per building.
     prestigedMaxBuildingLevelJson: Schemas.String,
+    // JSON-encoded Record<upgradeKey, number>: free starting levels per
+    // upgrade, chosen at each Renaissance. Used by the cost formula:
+    // cost = levelUpCost(totalLevel - perk, key).
+    perkPointsJson: Schemas.String,
   }),
   levelUpMultiBricks: Schemas.Map({ ts: Schemas.Int }),
   levelUpPickupRadius: Schemas.Map({ ts: Schemas.Int }),
@@ -62,7 +66,13 @@ export const Messages = {
   // availableBuildings; keeps maxBuildingLevel. The kept maxes drive a
   // 2^max income multiplier per building on every brick the player
   // collects there.
-  prestige: Schemas.Map({ ts: Schemas.Int }),
+  // Client -> server: trigger Renaissance with the chosen perk allocation.
+  // allocationJson is a Record<upgradeKey, number>; server validates the
+  // sum is within the player's earned pool before applying.
+  prestige: Schemas.Map({
+    ts: Schemas.Int,
+    allocationJson: Schemas.String,
+  }),
   // Server -> single contributor: their per-building max just rose to this
   // level. Drives the in-scene "Tower of Pisa Lv 3!" popup.
   buildingMaxAdvanced: Schemas.Map({

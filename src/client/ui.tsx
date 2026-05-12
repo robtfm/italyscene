@@ -29,6 +29,7 @@ import {
   isAtMax,
   leanRateScale,
   levelUpCost,
+  maxLevelFor,
   maxBrickStack,
   pickupRadius,
   plumbLinePersonalBonus,
@@ -52,7 +53,11 @@ const parchment = Color4.fromHexString('#e0d0a0ff')
 
 let skillTreeOpen = false
 let statsOpen = false
-let prestigeConfirming = false
+// Renaissance allocation modal — when open, holds the player's draft of
+// perk allocations they're about to commit. Initialised from their current
+// perkPoints when the modal opens.
+let renaissanceOpen = false
+let renaissanceDraft: Record<string, number> = {}
 let hoveredTooltip: string | null = null
 // Optional icon to show enlarged inside the tooltip — set in parallel with
 // hoveredTooltip when hovering an upgrade icon, cleared on mouse leave.
@@ -86,6 +91,16 @@ const ALL_UPGRADES: { key: string; getter: (s: ReturnType<typeof getMyStats>) =>
   { key: 'titheLevel', getter: (s) => s.titheLevel },
 ]
 
+// Cost-for-next-level given a perk-aware "total level". Perks are free
+// starting levels, so cost progression is based on purchases only.
+function nextCost(
+  totalLevel: number,
+  perkPoints: Record<string, number>,
+  key: string
+): number {
+  return levelUpCost(Math.max(0, totalLevel - (perkPoints[key] ?? 0)), key)
+}
+
 function currentlyBuyable(): Set<string> {
   const stats = getMyStats()
   const available = stats.lifetimeContributions - stats.bricksSpent
@@ -93,7 +108,8 @@ function currentlyBuyable(): Set<string> {
   for (const u of ALL_UPGRADES) {
     const lvl = u.getter(stats)
     if (isAtEffectiveMax(u.key, lvl, stats.maxBuildingLevel)) continue
-    if (available >= levelUpCost(lvl, u.key)) out.add(buyableKey(u.key, lvl + 1))
+    if (available >= nextCost(lvl, stats.perkPoints, u.key))
+      out.add(buyableKey(u.key, lvl + 1))
   }
   return out
 }
@@ -289,7 +305,7 @@ function imageButton(opts: {
   // Highlight even without hover — used for "you have new upgrades" pulse.
   popping?: boolean
   onMouseDown?: () => void
-  margin?: string
+  margin?: any
 }) {
   const hovered = hoveredImageButton === opts.key
   const active = hovered || !!opts.popping
@@ -370,6 +386,7 @@ const uiComponent = () => (
     {hoveredTooltip ? tooltipBox(hoveredTooltip) : null}
     {skillTreeOpen ? skillTreeModal() : null}
     {statsOpen ? statsModal() : null}
+    {renaissanceOpen ? renaissanceModal() : null}
     {getPopup() ? popupToast() : null}
   </UiEntity>
 )
@@ -432,6 +449,214 @@ function popupToast() {
             />
           </UiEntity>
         ),
+      })}
+    </UiEntity>
+  )
+}
+
+// Each upgrade keyed by its level field + the matching UPGRADE_INFO entry
+// (used for display titles in the Renaissance perk allocation modal).
+const PERK_ROWS: Array<{ levelKey: string; infoKey: string }> = [
+  { levelKey: 'multiBricksLevel', infoKey: 'multiBricks' },
+  { levelKey: 'pickupRadiusLevel', infoKey: 'pickupRadius' },
+  { levelKey: 'fasterSpawnsLevel', infoKey: 'fasterSpawns' },
+  { levelKey: 'leanDampenerLevel', infoKey: 'leanDampener' },
+  { levelKey: 'sturdyFoundationLevel', infoKey: 'sturdyFoundation' },
+  { levelKey: 'plumbLineLevel', infoKey: 'plumbLine' },
+  { levelKey: 'plumbTeacherLevel', infoKey: 'plumbTeacher' },
+  { levelKey: 'generousLevel', infoKey: 'generous' },
+  { levelKey: 'generousTeacherLevel', infoKey: 'generousTeacher' },
+  { levelKey: 'stockpileLevel', infoKey: 'stockpile' },
+  { levelKey: 'titheLevel', infoKey: 'tithe' },
+]
+
+function perkPoolFor(maxBuildingLevel: Record<string, number>): number {
+  let sum = 0
+  for (const v of Object.values(maxBuildingLevel)) sum += v
+  return Math.floor(sum / 3)
+}
+
+function renaissanceModal() {
+  const stats = getMyStats()
+  const pool = perkPoolFor(stats.maxBuildingLevel)
+  let allocated = 0
+  for (const v of Object.values(renaissanceDraft)) allocated += v
+  const remaining = pool - allocated
+  const canConfirm = allocated <= pool
+  return (
+    <UiEntity
+      uiTransform={{
+        positionType: 'absolute',
+        width: '100%',
+        height: '100%',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 150,
+      }}
+      uiBackground={{ color: panelBlack }}
+      onMouseDown={() => {
+        // Click outside the panel cancels.
+        renaissanceOpen = false
+      }}
+    >
+      <UiEntity
+        uiTransform={{ width: 520 }}
+        onMouseDown={() => {
+          /* swallow click */
+        }}
+      >
+        {framedPanel({
+          width: '100%',
+          padding: 12,
+          children: (
+            <UiEntity
+              uiTransform={{ width: '100%', flexDirection: 'column' }}
+            >
+              <Label
+                value="Renaissance — allocate permanent perks"
+                fontSize={16}
+                color={black}
+                uiTransform={{ width: '100%', height: 24 }}
+                textAlign="middle-center"
+              />
+              <Label
+                value={`Pool: ${pool}   ·   Allocated: ${allocated} / ${pool}`}
+                fontSize={12}
+                color={allocated > pool ? piazzaRed : black}
+                uiTransform={{ width: '100%', height: 20, margin: '4px 0 8px 0' }}
+                textAlign="middle-center"
+              />
+              {PERK_ROWS.map((row) => {
+                const info = UPGRADE_INFO[row.infoKey]
+                return perkAllocRow({
+                  levelKey: row.levelKey,
+                  title: info.title,
+                  description: info.description,
+                  iconPath: info.iconPath,
+                  current: renaissanceDraft[row.levelKey] ?? 0,
+                  remaining,
+                  cap: maxLevelFor(row.levelKey),
+                })
+              })}
+              <UiEntity
+                uiTransform={{
+                  width: '100%',
+                  flexDirection: 'row',
+                  justifyContent: 'space-between',
+                  margin: '14px 0 0 0',
+                }}
+              >
+                {roundedButton({
+                  value: 'Cancel',
+                  variant: 'secondary',
+                  width: 120,
+                  height: 30,
+                  onMouseDown: () => {
+                    renaissanceOpen = false
+                  },
+                })}
+                {roundedButton({
+                  value: 'Begin Renaissance',
+                  variant: canConfirm ? 'primary' : 'secondary',
+                  width: 220,
+                  height: 30,
+                  onMouseDown: () => {
+                    if (!canConfirm) return
+                    room.send('prestige', {
+                      ts: Date.now(),
+                      allocationJson: JSON.stringify(renaissanceDraft),
+                    })
+                    renaissanceOpen = false
+                    statsOpen = false
+                  },
+                })}
+              </UiEntity>
+              <Label
+                value="Resets bricks, upgrades, and unlocked buildings. Snapshots building maxes (income × 2^max per brick). Perks become free starting upgrade levels next run."
+                fontSize={10}
+                color={Color4.create(0, 0, 0, 0.65)}
+                uiTransform={{ width: '100%', height: 30, margin: '8px 0 0 0' }}
+                textAlign="middle-center"
+              />
+            </UiEntity>
+          ),
+        })}
+      </UiEntity>
+    </UiEntity>
+  )
+}
+
+function perkAllocRow(opts: {
+  levelKey: string
+  title: string
+  description: string
+  iconPath?: string
+  current: number
+  remaining: number
+  cap: number
+}) {
+  const atCap = opts.current >= opts.cap
+  const canDec = opts.current > 0
+  const canInc = !atCap && opts.remaining > 0
+  const tooltip = `${opts.title}\n\n${opts.description}`
+  return (
+    <UiEntity
+      uiTransform={{
+        width: '100%',
+        flexDirection: 'row',
+        alignItems: 'center',
+        height: 26,
+        margin: '2px 0',
+      }}
+      onMouseEnter={() => {
+        hoveredTooltip = tooltip
+        hoveredIcon = opts.iconPath ?? null
+        hoveredTooltipAnchorRight = true
+      }}
+      onMouseLeave={() => {
+        if (hoveredTooltip === tooltip) {
+          hoveredTooltip = null
+          hoveredIcon = null
+          hoveredTooltipAnchorRight = false
+        }
+      }}
+    >
+      <Label
+        value={opts.title}
+        fontSize={12}
+        color={black}
+        uiTransform={{ width: '60%', height: 22 }}
+      />
+      {roundedButton({
+        value: '−',
+        variant: canDec ? 'primary' : 'secondary',
+        width: 32,
+        height: 22,
+        fontSize: 14,
+        margin: '0 4px',
+        onMouseDown: () => {
+          if (!canDec) return
+          renaissanceDraft[opts.levelKey] = opts.current - 1
+        },
+      })}
+      <Label
+        value={`+${opts.current}`}
+        fontSize={13}
+        color={opts.current > 0 ? piazzaRed : black}
+        uiTransform={{ width: 50, height: 22 }}
+        textAlign="middle-center"
+      />
+      {roundedButton({
+        value: '+',
+        variant: canInc ? 'primary' : 'secondary',
+        width: 32,
+        height: 22,
+        fontSize: 14,
+        margin: '0 4px',
+        onMouseDown: () => {
+          if (!canInc) return
+          renaissanceDraft[opts.levelKey] = opts.current + 1
+        },
       })}
     </UiEntity>
   )
@@ -957,7 +1182,7 @@ function skillTreeModal() {
 
   const can = (key: string, level: number) =>
     !isAtEffectiveMax(key, level, stats.maxBuildingLevel) &&
-    available >= levelUpCost(level, key)
+    available >= nextCost(level, stats.perkPoints, key)
   const lockReasonFor = (key: string, level: number): string | undefined => {
     if (isAtMax(key, level)) return undefined // hard cap → "MAX"
     const gate = gateBlockingFor(key, level, stats.maxBuildingLevel)
@@ -1019,7 +1244,7 @@ function skillTreeModal() {
                 nowLevel: mbEff,
                 nextLevel: stats.nextEffectiveMultiBricksLevel,
                 sub: `World-wide. Effective ${mbEff.toFixed(2)}.`,
-                cost: levelUpCost(stats.multiBricksLevel, 'multiBricksLevel'),
+                cost: nextCost(stats.multiBricksLevel, stats.perkPoints, 'multiBricksLevel'),
                 atMax: isAtEffectiveMax('multiBricksLevel', stats.multiBricksLevel, stats.maxBuildingLevel),
                 canBuy: can('multiBricksLevel', stats.multiBricksLevel),
                 lockReason: lockReasonFor('multiBricksLevel', stats.multiBricksLevel),
@@ -1032,7 +1257,7 @@ function skillTreeModal() {
                 nowLevel: stats.pickupRadiusLevel,
                 nextLevel: stats.pickupRadiusLevel + 1,
                 sub: `Personal. Reach ${pickupRadius(stats.pickupRadiusLevel).toFixed(1)} m.`,
-                cost: levelUpCost(stats.pickupRadiusLevel, 'pickupRadiusLevel'),
+                cost: nextCost(stats.pickupRadiusLevel, stats.perkPoints, 'pickupRadiusLevel'),
                 atMax: isAtEffectiveMax('pickupRadiusLevel', stats.pickupRadiusLevel, stats.maxBuildingLevel),
                 canBuy: can('pickupRadiusLevel', stats.pickupRadiusLevel),
                 lockReason: lockReasonFor('pickupRadiusLevel', stats.pickupRadiusLevel),
@@ -1045,7 +1270,7 @@ function skillTreeModal() {
                 nowLevel: fsEff,
                 nextLevel: stats.nextEffectiveFasterSpawnsLevel,
                 sub: `World-wide. Effective ${fsEff.toFixed(2)}, interval × ${spawnIntervalScale(fsEff).toFixed(2)}.`,
-                cost: levelUpCost(stats.fasterSpawnsLevel, 'fasterSpawnsLevel'),
+                cost: nextCost(stats.fasterSpawnsLevel, stats.perkPoints, 'fasterSpawnsLevel'),
                 atMax: isAtEffectiveMax('fasterSpawnsLevel', stats.fasterSpawnsLevel, stats.maxBuildingLevel),
                 canBuy: can('fasterSpawnsLevel', stats.fasterSpawnsLevel),
                 lockReason: lockReasonFor('fasterSpawnsLevel', stats.fasterSpawnsLevel),
@@ -1058,7 +1283,7 @@ function skillTreeModal() {
                 nowLevel: ldEff,
                 nextLevel: stats.nextEffectiveLeanDampenerLevel,
                 sub: `World-wide. Effective ${ldEff.toFixed(2)}, lean rate × ${leanRateScale(ldEff).toFixed(2)}.`,
-                cost: levelUpCost(stats.leanDampenerLevel, 'leanDampenerLevel'),
+                cost: nextCost(stats.leanDampenerLevel, stats.perkPoints, 'leanDampenerLevel'),
                 atMax: isAtEffectiveMax('leanDampenerLevel', stats.leanDampenerLevel, stats.maxBuildingLevel),
                 canBuy: can('leanDampenerLevel', stats.leanDampenerLevel),
                 lockReason: lockReasonFor('leanDampenerLevel', stats.leanDampenerLevel),
@@ -1071,7 +1296,7 @@ function skillTreeModal() {
                 nowLevel: sfEff,
                 nextLevel: stats.nextEffectiveSturdyFoundationLevel,
                 sub: `World-wide. Effective ${sfEff.toFixed(2)}, threshold +${sturdyAngleBonus(sfEff).toFixed(1)}°.`,
-                cost: levelUpCost(stats.sturdyFoundationLevel, 'sturdyFoundationLevel'),
+                cost: nextCost(stats.sturdyFoundationLevel, stats.perkPoints, 'sturdyFoundationLevel'),
                 atMax: isAtEffectiveMax('sturdyFoundationLevel', stats.sturdyFoundationLevel, stats.maxBuildingLevel),
                 canBuy: can('sturdyFoundationLevel', stats.sturdyFoundationLevel),
                 lockReason: lockReasonFor('sturdyFoundationLevel', stats.sturdyFoundationLevel),
@@ -1084,7 +1309,7 @@ function skillTreeModal() {
                 nowLevel: stats.plumbLineLevel,
                 nextLevel: stats.plumbLineLevel + 1,
                 sub: `Personal. Your bricks straighten +${(plumbLinePersonalBonus(stats.plumbLineLevel) * 100).toFixed(0)}%.`,
-                cost: levelUpCost(stats.plumbLineLevel, 'plumbLineLevel'),
+                cost: nextCost(stats.plumbLineLevel, stats.perkPoints, 'plumbLineLevel'),
                 atMax: isAtEffectiveMax('plumbLineLevel', stats.plumbLineLevel, stats.maxBuildingLevel),
                 canBuy: can('plumbLineLevel', stats.plumbLineLevel),
                 lockReason: lockReasonFor('plumbLineLevel', stats.plumbLineLevel),
@@ -1096,7 +1321,7 @@ function skillTreeModal() {
                 nowLevel: getEffectivePlumbTeacherLevel(),
                 nextLevel: stats.nextEffectivePlumbTeacherLevel,
                 sub: `World-wide. Eff ${getEffectivePlumbTeacherLevel().toFixed(2)}, +${(plumbLineTeacherBonus(getEffectivePlumbTeacherLevel()) * 100).toFixed(0)}% to all bricks.`,
-                cost: levelUpCost(stats.plumbTeacherLevel, 'plumbTeacherLevel'),
+                cost: nextCost(stats.plumbTeacherLevel, stats.perkPoints, 'plumbTeacherLevel'),
                 atMax: isAtEffectiveMax('plumbTeacherLevel', stats.plumbTeacherLevel, stats.maxBuildingLevel),
                 canBuy: can('plumbTeacherLevel', stats.plumbTeacherLevel),
                 lockReason: lockReasonFor('plumbTeacherLevel', stats.plumbTeacherLevel),
@@ -1109,7 +1334,7 @@ function skillTreeModal() {
                 nowLevel: stats.generousLevel,
                 nextLevel: stats.generousLevel + 1,
                 sub: `Personal. Your bricks worth +${(contributionPersonalBonus(stats.generousLevel) * 100).toFixed(0)}%.`,
-                cost: levelUpCost(stats.generousLevel, 'generousLevel'),
+                cost: nextCost(stats.generousLevel, stats.perkPoints, 'generousLevel'),
                 atMax: isAtEffectiveMax('generousLevel', stats.generousLevel, stats.maxBuildingLevel),
                 canBuy: can('generousLevel', stats.generousLevel),
                 lockReason: lockReasonFor('generousLevel', stats.generousLevel),
@@ -1121,7 +1346,7 @@ function skillTreeModal() {
                 nowLevel: getEffectiveGenerousTeacherLevel(),
                 nextLevel: stats.nextEffectiveGenerousTeacherLevel,
                 sub: `World-wide. Eff ${getEffectiveGenerousTeacherLevel().toFixed(2)}, +${(contributionTeacherBonus(getEffectiveGenerousTeacherLevel()) * 100).toFixed(0)}% to all bricks.`,
-                cost: levelUpCost(stats.generousTeacherLevel, 'generousTeacherLevel'),
+                cost: nextCost(stats.generousTeacherLevel, stats.perkPoints, 'generousTeacherLevel'),
                 atMax: isAtEffectiveMax('generousTeacherLevel', stats.generousTeacherLevel, stats.maxBuildingLevel),
                 canBuy: can('generousTeacherLevel', stats.generousTeacherLevel),
                 lockReason: lockReasonFor('generousTeacherLevel', stats.generousTeacherLevel),
@@ -1134,7 +1359,7 @@ function skillTreeModal() {
                 nowLevel: getEffectiveStockpileLevel(),
                 nextLevel: stats.nextEffectiveStockpileLevel,
                 sub: `World-wide. Eff ${getEffectiveStockpileLevel().toFixed(2)}, brick cap × ${brickCapMultiplier(getEffectiveStockpileLevel()).toFixed(2)}.`,
-                cost: levelUpCost(stats.stockpileLevel, 'stockpileLevel'),
+                cost: nextCost(stats.stockpileLevel, stats.perkPoints, 'stockpileLevel'),
                 atMax: isAtEffectiveMax('stockpileLevel', stats.stockpileLevel, stats.maxBuildingLevel),
                 canBuy: can('stockpileLevel', stats.stockpileLevel),
                 lockReason: lockReasonFor('stockpileLevel', stats.stockpileLevel),
@@ -1146,7 +1371,7 @@ function skillTreeModal() {
                 nowLevel: stats.titheLevel,
                 nextLevel: stats.titheLevel + 1,
                 sub: `Personal. +${(titheBonus(stats.titheLevel) * 100).toFixed(0)}% upgrade currency on every brick you collect.`,
-                cost: levelUpCost(stats.titheLevel, 'titheLevel'),
+                cost: nextCost(stats.titheLevel, stats.perkPoints, 'titheLevel'),
                 atMax: isAtEffectiveMax('titheLevel', stats.titheLevel, stats.maxBuildingLevel),
                 canBuy: can('titheLevel', stats.titheLevel),
                 lockReason: lockReasonFor('titheLevel', stats.titheLevel),
@@ -1195,7 +1420,6 @@ function statsModal() {
       uiBackground={{ color: panelBlack }}
       onMouseDown={() => {
         statsOpen = false
-        prestigeConfirming = false
       }}
     >
       <UiEntity
@@ -1216,11 +1440,7 @@ function statsModal() {
               }}
             >
               <Label
-                value={
-                  stats.prestigeLevel > 0
-                    ? `Your stats — Renaissance Lv ${stats.prestigeLevel}`
-                    : 'Your stats'
-                }
+                value="Your stats"
                 fontSize={20}
                 color={piazzaRed}
                 uiTransform={{ width: '100%', height: 30 }}
@@ -1275,6 +1495,41 @@ function statsModal() {
                 })
               )}
 
+              {(() => {
+                const pool = perkPoolFor(stats.maxBuildingLevel)
+                let allocated = 0
+                for (const v of Object.values(stats.perkPoints)) allocated += v
+                const unclaimed = Math.max(0, pool - allocated)
+                return (
+                  <UiEntity
+                    uiTransform={{
+                      width: '100%',
+                      flexDirection: 'column',
+                      margin: '14px 0 0 0',
+                    }}
+                  >
+                    <Label
+                      value={`Renaissance perks available: ${unclaimed}`}
+                      fontSize={14}
+                      color={unclaimed > 0 ? piazzaRed : black}
+                      uiTransform={{ width: '100%', height: 22 }}
+                      textAlign="middle-center"
+                    />
+                    <Label
+                      value="Earn 1 perk per 3 total building max levels. Spend them at Renaissance for permanent free starting levels on any upgrade — fully respec-able each time."
+                      fontSize={11}
+                      color={Color4.create(0, 0, 0, 0.7)}
+                      uiTransform={{
+                        width: '100%',
+                        height: 32,
+                        margin: '4px 0 0 0',
+                      }}
+                      textAlign="middle-center"
+                    />
+                  </UiEntity>
+                )
+              })()}
+
               <UiEntity
                 uiTransform={{
                   width: '100%',
@@ -1286,25 +1541,13 @@ function statsModal() {
                 }}
               >
                 {roundedButton({
-                  value: prestigeConfirming
-                    ? 'Begin Renaissance?'
-                    : 'Renaissance',
-                  // primary = filled red; use it whenever pressing it would
-                  // do something useful (gain or commit a prestige bump).
-                  variant:
-                    prestigeConfirming || hasPrestigeBenefit
-                      ? 'primary'
-                      : 'secondary',
+                  value: 'Renaissance…',
+                  variant: hasPrestigeBenefit ? 'primary' : 'secondary',
                   width: 180,
                   height: 28,
                   onMouseDown: () => {
-                    if (prestigeConfirming) {
-                      room.send('prestige', { ts: Date.now() })
-                      prestigeConfirming = false
-                      statsOpen = false
-                    } else {
-                      prestigeConfirming = true
-                    }
+                    renaissanceDraft = { ...stats.perkPoints }
+                    renaissanceOpen = true
                   },
                 })}
                 {roundedButton({
@@ -1314,19 +1557,9 @@ function statsModal() {
                   height: 28,
                   onMouseDown: () => {
                     statsOpen = false
-                    prestigeConfirming = false
                   },
                 })}
               </UiEntity>
-              {prestigeConfirming ? (
-                <Label
-                  value="Resets bricks + upgrades. Keeps building maxes (income × 2^max per brick on each building)."
-                  fontSize={11}
-                  color={piazzaRed}
-                  uiTransform={{ width: '100%', height: 18, margin: '6px 0 0 0' }}
-                  textAlign="middle-center"
-                />
-              ) : null}
             </UiEntity>
           ),
         })}
