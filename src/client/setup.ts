@@ -250,7 +250,14 @@ function applyBuildingVisual(
     const tTip = cfg.collapseAnimDuration
     const tHold = tTip + cfg.collapseHoldDuration
 
-    if (state.collapseTime <= tTip) {
+    if (state.collapseTime < 0) {
+      // Server set this to a negative guard value after firing the async
+      // transition; hold the building in its fully-fallen-and-sunk pose
+      // until the state reset arrives, otherwise the tipping branch
+      // computes a wild rotation off the negative collapseTime.
+      leanDeg = cfg.collapseAngleEnd
+      baseSinkOffset = -cfg.collapseSinkDistance
+    } else if (state.collapseTime <= tTip) {
       const t = state.collapseTime / cfg.collapseAnimDuration
       const eased = t * t * (3 - 2 * t)
       leanDeg =
@@ -267,8 +274,15 @@ function applyBuildingVisual(
     localDisplayLean.set(stateEntity, leanDeg)
   } else {
     let display = localDisplayLean.get(stateEntity) ?? 0
-    const easing = 1 - Math.exp(-dt * 12)
-    display += (state.currentLean - display) * easing
+    if (state.riseProgress < cfg.riseStartLeanProgress) {
+      // Pre-lean (fresh respawn after collapse, or just-emerged building).
+      // Snap to target so we don't tween down from a stored collapseAngleEnd
+      // value — that read like a violent un-tilt on tall towers.
+      display = state.currentLean
+    } else {
+      const easing = 1 - Math.exp(-dt * 12)
+      display += (state.currentLean - display) * easing
+    }
     localDisplayLean.set(stateEntity, display)
     leanDeg = display
   }
