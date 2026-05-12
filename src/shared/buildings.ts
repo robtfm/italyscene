@@ -58,7 +58,7 @@ export const PISA: BuildingConfig = {
   collapseHoldDuration: 0.5,
   collapseSinkDuration: 1.5,
   collapseSinkDistance: 10,
-  riseStartLeanProgress: 0.5,
+  riseStartLeanProgress: 0.1,
   naturalLeanDeg: 4,
   programmaticSpawn: {
     position: { x: 40, y: 3, z: 40 },
@@ -90,7 +90,7 @@ export const COLOSSEUM: BuildingConfig = {
   collapseHoldDuration: 0.5,
   collapseSinkDuration: 1.5,
   collapseSinkDistance: 9,
-  riseStartLeanProgress: 0.5,
+  riseStartLeanProgress: 0.1,
   naturalLeanDeg: 0,
   programmaticSpawn: {
     position: { x: 40, y: 3, z: 15 },
@@ -122,7 +122,7 @@ export const DUOMO: BuildingConfig = {
   collapseHoldDuration: 0.5,
   collapseSinkDuration: 1.5,
   collapseSinkDistance: 11,
-  riseStartLeanProgress: 0.5,
+  riseStartLeanProgress: 0.1,
   naturalLeanDeg: 1,
   programmaticSpawn: {
     position: { x: 62, y: 3.5, z: 43 },
@@ -154,7 +154,7 @@ export const PANTHEON: BuildingConfig = {
   collapseHoldDuration: 0.5,
   collapseSinkDuration: 1.5,
   collapseSinkDistance: 10,
-  riseStartLeanProgress: 0.5,
+  riseStartLeanProgress: 0.1,
   naturalLeanDeg: 0,
   programmaticSpawn: {
     position: { x: 17, y: 3, z: 52 },
@@ -186,7 +186,7 @@ export const TREVI: BuildingConfig = {
   collapseHoldDuration: 0.5,
   collapseSinkDuration: 1.5,
   collapseSinkDistance: 13,
-  riseStartLeanProgress: 0.5,
+  riseStartLeanProgress: 0.1,
   naturalLeanDeg: 2,
   programmaticSpawn: {
     position: { x: 50, y: 3.5, z: 60 },
@@ -216,7 +216,7 @@ export const DOGES_PALACE: BuildingConfig = {
   collapseHoldDuration: 0.5,
   collapseSinkDuration: 1.5,
   collapseSinkDistance: 9,
-  riseStartLeanProgress: 0.5,
+  riseStartLeanProgress: 0.1,
   naturalLeanDeg: 0,
   programmaticSpawn: {
     position: { x: 15, y: 3, z: 25 },

@@ -259,6 +259,32 @@ function topCenter() {
           active.riseProgress * 100
         )}% (${active.bricksRequired} bricks)`
 
+  function leanFraction(
+    a: NonNullable<ReturnType<typeof getActiveBuildingState>>
+  ): number {
+    const threshold = a.collapseAngleDeg + sturdyAngleBonus(getEffectiveSturdyFoundationLevel())
+    return threshold > 0 ? a.displayLean / threshold : 0
+  }
+  function leanDescription(
+    a: ReturnType<typeof getActiveBuildingState>
+  ): string {
+    if (!a) return '—'
+    if (a.collapsing) return 'collapsing!'
+    const f = leanFraction(a)
+    if (f < 0.15) return 'stable'
+    if (f < 0.35) return 'settling'
+    if (f < 0.6) return 'unsteady'
+    if (f < 0.85) return 'precarious'
+    return 'dangerous'
+  }
+  function leanColor(a: ReturnType<typeof getActiveBuildingState>): Color4 {
+    if (!a) return black
+    const f = leanFraction(a)
+    if (f < 0.6) return black
+    if (f < 0.85) return Color4.fromHexString('#a85a18ff')
+    return piazzaRed
+  }
+
   return (
     <UiEntity
       uiTransform={{
@@ -293,9 +319,9 @@ function topCenter() {
               uiTransform={{ width: '100%', height: 22 }}
             />
             <Label
-              value={`Lean: ${active ? active.displayLean.toFixed(1) : '0.0'}°`}
+              value={`Lean: ${leanDescription(active)}`}
               fontSize={12}
-              color={active && active.displayLean > 25 ? piazzaRed : black}
+              color={leanColor(active)}
               uiTransform={{ width: '100%', height: 18 }}
             />
             <Label

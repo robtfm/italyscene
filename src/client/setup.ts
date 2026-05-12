@@ -376,6 +376,7 @@ export function getActiveBuildingState(): {
   displayName: string
   riseProgress: number
   displayLean: number
+  collapseAngleDeg: number
   collapsing: boolean
   completedTime: number
   bricksRequired: number
@@ -391,6 +392,7 @@ export function getActiveBuildingState(): {
       displayName: cfg.displayName,
       riseProgress: state.riseProgress,
       displayLean: localDisplayLean.get(entity) ?? state.currentLean,
+      collapseAngleDeg: cfg.collapseAngleDeg,
       collapsing: state.collapsing,
       completedTime: state.completedTime,
       bricksRequired: bricksRequiredFor(cfg, state.level),

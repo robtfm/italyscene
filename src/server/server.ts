@@ -1147,8 +1147,14 @@ function serverBuildingSystem(dt: number) {
     } else {
       state.completedTime = 0
       if (state.riseProgress > cfg.riseStartLeanProgress) {
+        // Scale rate linearly with rise: 0 at riseStartLeanProgress,
+        // 1× nominal at p=0.55, ~2× at p=1.0 (taller = leans faster).
+        const heightScale =
+          (state.riseProgress - cfg.riseStartLeanProgress) /
+          (0.55 - cfg.riseStartLeanProgress)
         state.currentLean +=
           cfg.leanRatePerSec *
+          heightScale *
           leanRateScale(ws.effectiveLeanDampenerLevel) *
           dt
       }
