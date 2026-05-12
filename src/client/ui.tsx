@@ -1,4 +1,4 @@
-import { engine, PrimaryPointerInfo, Transform } from '@dcl/sdk/ecs'
+import { engine, PrimaryPointerInfo, RealmInfo, Transform } from '@dcl/sdk/ecs'
 import { Color4 } from '@dcl/sdk/math'
 import ReactEcs, {
   Button,
@@ -108,6 +108,56 @@ function acknowledgeBuyables() {
   for (const k of currentlyBuyable()) acknowledgedBuyables.add(k)
 }
 
+// Same acknowledgement pattern for the prestige benefit. Each (building,
+// currentMax) where currentMax > prestigedMax is a key; opening the
+// character modal adds those keys to the ack set, so the next time a player
+// beats a building at a higher level a fresh key pops the highlight again.
+const acknowledgedPrestige = new Set<string>()
+
+function pendingPrestigeBenefits(): Set<string> {
+  const stats = getMyStats()
+  const out = new Set<string>()
+  for (const k of Object.keys(stats.maxBuildingLevel)) {
+    const cur = stats.maxBuildingLevel[k] ?? 0
+    const snap = stats.prestigedMaxBuildingLevel[k] ?? 0
+    if (cur > snap) out.add(`${k}:${cur}`)
+  }
+  return out
+}
+
+function hasUnacknowledgedPrestigeBenefit(): boolean {
+  for (const k of pendingPrestigeBenefits()) {
+    if (!acknowledgedPrestige.has(k)) return true
+  }
+  return false
+}
+
+function acknowledgePrestigeBenefits() {
+  for (const k of pendingPrestigeBenefits()) acknowledgedPrestige.add(k)
+}
+
+function isPreviewRealm(): boolean {
+  return RealmInfo.getOrNull(engine.RootEntity)?.isPreview ?? false
+}
+
+// Auto-fire while the DEBUG brick button is held. setupUi installs a system
+// that sends one debugAddBrick every DEBUG_HOLD_INTERVAL_MS while held.
+let debugAddBrickHeld = false
+let debugAddBrickTimer = 0
+const DEBUG_HOLD_INTERVAL_MS = 100
+
+function debugBrickHoldSystem(dt: number) {
+  if (!debugAddBrickHeld) {
+    debugAddBrickTimer = 0
+    return
+  }
+  debugAddBrickTimer += dt * 1000
+  while (debugAddBrickTimer >= DEBUG_HOLD_INTERVAL_MS) {
+    debugAddBrickTimer -= DEBUG_HOLD_INTERVAL_MS
+    room.send('debugAddBrick', { ts: Date.now() })
+  }
+}
+
 const CARD_TOP = 110
 const CARD_STRIDE = 110
 const CARD_WIDTH = 170
@@ -184,6 +234,8 @@ type RoundedButtonProps = {
   margin?: any
   color?: Color4
   onMouseDown?: () => void
+  onMouseUp?: () => void
+  onMouseLeave?: () => void
 }
 function roundedButton(p: RoundedButtonProps) {
   // Spread color only when explicitly set; passing color={undefined} overrides
@@ -201,6 +253,8 @@ function roundedButton(p: RoundedButtonProps) {
       variant={p.variant ?? 'primary'}
       fontSize={p.fontSize ?? 12}
       onMouseDown={p.onMouseDown}
+      onMouseUp={p.onMouseUp}
+      onMouseLeave={p.onMouseLeave}
       {...colorProp}
     />
   )
@@ -217,8 +271,87 @@ function lerpColor(a: Color4, b: Color4, t: number): Color4 {
 
 const popHot = Color4.fromHexString('#ffd24aff')
 
+// Hover state for image-based buttons (skill-tree icon, stats icon, etc.).
+// Module-level so onMouseLeave on one button can safely no-op when the hover
+// has already moved to a sibling — see the ownership pattern used by the
+// powerup-card tooltips.
+let hoveredImageButton: string | null = null
+
+function imageButton(opts: {
+  // Stable id; keep hover state from sticking on a sibling.
+  key: string
+  src: string
+  width: number
+  height: number
+  label?: string
+  // Highlight even without hover — used for "you have new upgrades" pulse.
+  popping?: boolean
+  onMouseDown?: () => void
+  margin?: string
+}) {
+  const hovered = hoveredImageButton === opts.key
+  const active = hovered || !!opts.popping
+  // Halo cycles parchment ↔ popHot at ~1 Hz when active; transparent otherwise.
+  const cycle = (Math.sin((Date.now() / 1000) * Math.PI * 2) + 1) / 2
+  const haloColor = active
+    ? lerpColor(parchment, popHot, cycle)
+    : Color4.create(0, 0, 0, 0)
+  const FRAME = 6
+  const LABEL_HEIGHT = opts.label ? 20 : 0
+  // Outer column: halo wraps only the image; label sits below it so the
+  // cycling halo color doesn't clash with the text.
+  return (
+    <UiEntity
+      uiTransform={{
+        width: opts.width + FRAME * 2,
+        height: opts.height + FRAME * 2 + LABEL_HEIGHT,
+        margin: opts.margin,
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'flex-start',
+      }}
+      onMouseEnter={() => {
+        hoveredImageButton = opts.key
+      }}
+      onMouseLeave={() => {
+        if (hoveredImageButton === opts.key) hoveredImageButton = null
+      }}
+      onMouseDown={opts.onMouseDown}
+    >
+      <UiEntity
+        uiTransform={{
+          width: opts.width + FRAME * 2,
+          height: opts.height + FRAME * 2,
+          alignItems: 'center',
+          justifyContent: 'center',
+          borderRadius: 14,
+        }}
+        uiBackground={{ color: haloColor }}
+      >
+        <UiEntity
+          uiTransform={{ width: opts.width, height: opts.height }}
+          uiBackground={{
+            texture: { src: opts.src },
+            textureMode: 'stretch',
+          }}
+        />
+      </UiEntity>
+      {opts.label ? (
+        <Label
+          value={opts.label}
+          fontSize={14}
+          color={Color4.White()}
+          uiTransform={{ width: '100%', height: LABEL_HEIGHT }}
+          textAlign="middle-center"
+        />
+      ) : null}
+    </UiEntity>
+  )
+}
+
 export function setupUi() {
   ReactEcsRenderer.setUiRenderer(uiComponent)
+  engine.addSystem(debugBrickHoldSystem)
 }
 
 const uiComponent = () => (
@@ -700,60 +833,50 @@ function bottomActions() {
         justifyContent: 'center',
       }}
     >
-      {(() => {
-        const popping = hasUnacknowledgedBuyable()
-        // Smooth sine pulse: 0..1 cycling at ~1.6Hz
-        const pulse = popping
-          ? (Math.sin((Date.now() / 1000) * Math.PI * 1.6) + 1) / 2
-          : 0
-        // Slot stays the size of the maximum popping button so growth doesn't
-        // shove neighbours around. Button centered inside.
-        const SKILL_SLOT_WIDTH = 210
-        const SKILL_SLOT_HEIGHT = 44
-        return (
-          <UiEntity
-            uiTransform={{
-              width: SKILL_SLOT_WIDTH,
-              height: SKILL_SLOT_HEIGHT,
-              margin: '0 4px',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            {roundedButton({
-              value: popping ? 'Skill tree (NEW)' : 'Skill tree',
-              variant: 'primary',
-              width: popping ? 170 + 24 * pulse : 140,
-              height: popping ? 32 + 6 * pulse : 32,
-              fontSize: 13,
-              color: popping
-                ? lerpColor(Color4.White(), popHot, pulse)
-                : undefined,
-              onMouseDown: () => {
-                acknowledgeBuyables()
-                skillTreeOpen = true
-              },
-            })}
-          </UiEntity>
-        )
-      })()}
-      {roundedButton({
-        value: 'Stats',
-        variant: 'secondary',
-        width: 110,
+      {imageButton({
+        key: 'skill-tree',
+        src: 'images/skill_tree.png',
+        width: 150,
+        height: 90,
+        label: 'Skill tree',
         margin: '0 4px',
-        fontSize: 12,
+        popping: hasUnacknowledgedBuyable(),
         onMouseDown: () => {
+          acknowledgeBuyables()
+          skillTreeOpen = true
+        },
+      })}
+      {imageButton({
+        key: 'stats',
+        src: 'images/prestige.png',
+        width: 150,
+        height: 90,
+        label: 'Character',
+        margin: '0 4px',
+        popping: hasUnacknowledgedPrestigeBenefit(),
+        onMouseDown: () => {
+          acknowledgePrestigeBenefits()
           statsOpen = true
         },
       })}
-      {roundedButton({
-        value: 'DEBUG: +1 brick',
-        variant: 'secondary',
-        margin: '0 4px',
-        fontSize: 11,
-        onMouseDown: () => room.send('debugAddBrick', { ts: Date.now() }),
-      })}
+      {isPreviewRealm()
+        ? roundedButton({
+            value: 'DEBUG: +1 brick (hold)',
+            variant: 'secondary',
+            margin: '0 4px',
+            fontSize: 11,
+            onMouseDown: () => {
+              debugAddBrickHeld = true
+              room.send('debugAddBrick', { ts: Date.now() })
+            },
+            onMouseUp: () => {
+              debugAddBrickHeld = false
+            },
+            onMouseLeave: () => {
+              debugAddBrickHeld = false
+            },
+          })
+        : null}
     </UiEntity>
   )
 }
@@ -985,6 +1108,14 @@ function skillTreeModal() {
 function statsModal() {
   const stats = getMyStats()
   const available = stats.lifetimeContributions - stats.bricksSpent
+  // Prestige gives a 2^max income multiplier per building. There's a benefit
+  // any time some building's current max exceeds the snapshot taken at the
+  // last prestige.
+  const hasPrestigeBenefit = Object.keys(stats.maxBuildingLevel).some(
+    (k) =>
+      (stats.maxBuildingLevel[k] ?? 0) >
+      (stats.prestigedMaxBuildingLevel[k] ?? 0)
+  )
   return (
     <UiEntity
       uiTransform={{
@@ -998,6 +1129,7 @@ function statsModal() {
       uiBackground={{ color: panelBlack }}
       onMouseDown={() => {
         statsOpen = false
+        prestigeConfirming = false
       }}
     >
       <UiEntity
@@ -1062,7 +1194,12 @@ function statsModal() {
                   value: prestigeConfirming
                     ? 'Confirm prestige?'
                     : 'Prestige',
-                  variant: prestigeConfirming ? 'primary' : 'secondary',
+                  // primary = filled red; use it whenever pressing it would
+                  // do something useful (gain or commit a prestige bump).
+                  variant:
+                    prestigeConfirming || hasPrestigeBenefit
+                      ? 'primary'
+                      : 'secondary',
                   width: 180,
                   height: 28,
                   onMouseDown: () => {
