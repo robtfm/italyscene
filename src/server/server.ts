@@ -831,6 +831,20 @@ function presentPlayerAddresses(): Set<string> {
 
 async function handleBuildingCollapse(cfg: BuildingConfig) {
   console.log('[SERVER] Building collapsed:', cfg.entityName, '— hard repick')
+  // transitionToBuilding only resets the next building; clear the collapsed
+  // one here so its `collapsing=true` flag doesn't keep the earthquake system
+  // (or anything else gated on it) latched on forever.
+  const collapsedEntity = findBuildingStateEntity(cfg.entityName)
+  if (collapsedEntity) {
+    const s = BuildingState.getMutable(collapsedEntity)
+    s.collapsing = false
+    s.collapseTime = 0
+    s.collapseStartProgress = 0
+    s.completedTime = 0
+    s.riseProgress = 0
+    s.currentLean = 0
+    s.lastCompletedAt = 0
+  }
   const next = await pickNextBuildingKey(cfg.entityName)
   await transitionToBuilding(next, cfg)
 }
