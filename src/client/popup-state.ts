@@ -15,5 +15,5 @@ export function clearBuildingAdvance() {
 export function showBuildingAdvance(buildingKey: string, level: number) {
   const cfg = BUILDING_CONFIGS.find((c) => c.entityName === buildingKey)
   const name = cfg?.displayName ?? buildingKey
-  buildingAdvance = `${name} Lv ${level}!`
+  buildingAdvance = `New building level achieved! ${name} Lv ${level}`
 }

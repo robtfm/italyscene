@@ -1218,12 +1218,41 @@ function statsModal() {
               {statsLine('Spent on upgrades', stats.bricksSpent)}
               {statsLine('Available', available)}
 
-              <Label
-                value="Buildings — your max level (income mult)"
-                fontSize={12}
-                color={black}
-                uiTransform={{ width: '100%', height: 20, margin: '12px 0 4px 0' }}
-              />
+              <UiEntity
+                uiTransform={{
+                  width: '100%',
+                  flexDirection: 'row',
+                  margin: '12px 0 4px 0',
+                }}
+              >
+                <Label
+                  value="Buildings"
+                  fontSize={12}
+                  color={black}
+                  uiTransform={{ width: '50%', height: 20 }}
+                />
+                <Label
+                  value="Max"
+                  fontSize={11}
+                  color={black}
+                  uiTransform={{ width: '16%', height: 20 }}
+                  textAlign="middle-center"
+                />
+                <Label
+                  value="Income"
+                  fontSize={11}
+                  color={black}
+                  uiTransform={{ width: '17%', height: 20 }}
+                  textAlign="middle-right"
+                />
+                <Label
+                  value="After prestige"
+                  fontSize={11}
+                  color={black}
+                  uiTransform={{ width: '17%', height: 20 }}
+                  textAlign="middle-right"
+                />
+              </UiEntity>
 
               {BUILDING_CONFIGS.map((cfg) =>
                 buildingStatsRow({
@@ -1327,12 +1356,13 @@ function buildingStatsRow(opts: {
   prestigedMax: number
 }) {
   const incomeMult = Math.pow(2, opts.prestigedMax)
+  const afterMult = Math.pow(2, opts.yourMax)
+  const increases = afterMult > incomeMult
   return (
     <UiEntity
       uiTransform={{
         width: '100%',
         flexDirection: 'row',
-        justifyContent: 'space-between',
         padding: 4,
         margin: '2px 0',
         borderRadius: 4,
@@ -1343,20 +1373,27 @@ function buildingStatsRow(opts: {
         value={opts.name}
         fontSize={13}
         color={black}
-        uiTransform={{ width: '55%', height: 20 }}
+        uiTransform={{ width: '50%', height: 20 }}
       />
       <Label
         value={`Lv ${opts.yourMax}`}
         fontSize={13}
         color={opts.yourMax > 0 ? piazzaRed : black}
-        uiTransform={{ width: '20%', height: 20 }}
+        uiTransform={{ width: '16%', height: 20 }}
         textAlign="middle-center"
       />
       <Label
         value={opts.prestigedMax > 0 ? `×${incomeMult}` : '—'}
         fontSize={11}
         color={black}
-        uiTransform={{ width: '25%', height: 20 }}
+        uiTransform={{ width: '17%', height: 20 }}
+        textAlign="middle-right"
+      />
+      <Label
+        value={opts.yourMax > 0 ? `×${afterMult}` : '—'}
+        fontSize={11}
+        color={increases ? piazzaRed : black}
+        uiTransform={{ width: '17%', height: 20 }}
         textAlign="middle-right"
       />
     </UiEntity>
