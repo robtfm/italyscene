@@ -341,6 +341,7 @@ function sendMyStats(rawAddress: string, profile: PlayerProfile) {
       prestigeLevel: profile.prestigeLevel ?? 0,
       lifetimeContributions: profile.lifetimeContributions,
       bricksSpent: profile.bricksSpent,
+      availableBuildings: profile.availableBuildings ?? 0,
       multiBricksLevel: profile.multiBricksLevel,
       pickupRadiusLevel: profile.pickupRadiusLevel,
       fasterSpawnsLevel: profile.fasterSpawnsLevel,
@@ -927,7 +928,7 @@ async function handleBuildingCompletion(cfg: BuildingConfig) {
 
   // Credit eligible players' profiles. Both progressions cap at +1 per
   // completion: a low-tier player who joins a high-level party advances by
-  // one rung in each track, not all the way to the completed level —
+  // one level in each track, not all the way to the completed level —
   // preserves the granularity for skill / building unlocks gated on
   // per-building max levels (e.g., "beat Colosseum L4+").
   for (const address of eligible) {
@@ -1002,7 +1003,7 @@ function encodePoolIndex(entityName: string, level: number): number | null {
 
 // What pool indices does this player WANT next?
 //   1. The "highest available" index — their availableBuildings counter
-//      itself, beating which advances them by one rung.
+//      itself, beating which advances them by one level.
 //   2. Each (gateBuilding, gateMax) pair where the player has currency to
 //      buy a gated upgrade right now but is locked at the building's max.
 function wantedIndicesFor(

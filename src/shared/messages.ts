@@ -19,6 +19,9 @@ export const Messages = {
     prestigeLevel: Schemas.Int,
     lifetimeContributions: Schemas.Int,
     bricksSpent: Schemas.Int,
+    // Player's pool-unlock pointer: pool index = 0..availableBuildings is
+    // the set of (building, level) pairs the player can have spawned.
+    availableBuildings: Schemas.Int,
     multiBricksLevel: Schemas.Int,
     pickupRadiusLevel: Schemas.Int,
     fasterSpawnsLevel: Schemas.Int,

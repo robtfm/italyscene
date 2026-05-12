@@ -31,6 +31,7 @@ export type MyStats = {
   prestigeLevel: number
   lifetimeContributions: number
   bricksSpent: number
+  availableBuildings: number
   multiBricksLevel: number
   pickupRadiusLevel: number
   fasterSpawnsLevel: number
@@ -57,6 +58,7 @@ let myStats: MyStats = {
   prestigeLevel: 0,
   lifetimeContributions: 0,
   bricksSpent: 0,
+  availableBuildings: 0,
   multiBricksLevel: 0,
   pickupRadiusLevel: 0,
   fasterSpawnsLevel: 0,
@@ -115,6 +117,7 @@ export function initClient() {
       prestigeLevel: data.prestigeLevel,
       lifetimeContributions: data.lifetimeContributions,
       bricksSpent: data.bricksSpent,
+      availableBuildings: data.availableBuildings,
       multiBricksLevel: data.multiBricksLevel,
       pickupRadiusLevel: data.pickupRadiusLevel,
       fasterSpawnsLevel: data.fasterSpawnsLevel,

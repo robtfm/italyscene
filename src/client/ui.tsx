@@ -1457,33 +1457,41 @@ function statsModal() {
                   margin: '12px 0 4px 0',
                 }}
               >
-                <Label
-                  value="Buildings"
-                  fontSize={12}
-                  color={black}
-                  uiTransform={{ width: '50%', height: 20 }}
-                />
-                <Label
-                  value="Max"
-                  fontSize={11}
-                  color={black}
-                  uiTransform={{ width: '16%', height: 20 }}
-                  textAlign="middle-center"
-                />
-                <Label
-                  value="Income"
-                  fontSize={11}
-                  color={black}
-                  uiTransform={{ width: '17%', height: 20 }}
-                  textAlign="middle-right"
-                />
-                <Label
-                  value="After Renaissance"
-                  fontSize={11}
-                  color={black}
-                  uiTransform={{ width: '17%', height: 20 }}
-                  textAlign="middle-right"
-                />
+                {statsHeaderCell({
+                  label: 'Buildings',
+                  width: '38%',
+                  align: 'middle-left',
+                  tooltip:
+                    'Buildings\n\nThe six Italian landmarks. Each has its own level ladder and progression record.',
+                })}
+                {statsHeaderCell({
+                  label: 'Builder',
+                  width: '14%',
+                  align: 'middle-center',
+                  tooltip:
+                    "Builder level\n\nYour highest personal level on this building. Bumps by +1 each time you beat a level at or above your current builder level — leapfrogging doesn't jump it more than +1 per completion.",
+                })}
+                {statsHeaderCell({
+                  label: 'Income',
+                  width: '15%',
+                  align: 'middle-right',
+                  tooltip:
+                    'Income\n\nPer-brick income multiplier from this building, locked at 2^N where N is your builder level at the last Renaissance.',
+                })}
+                {statsHeaderCell({
+                  label: 'After R’sance',
+                  width: '17%',
+                  align: 'middle-right',
+                  tooltip:
+                    "After Renaissance\n\nWhat Income would become if you Renaissance right now (2^current builder level). Highlighted when better than today's Income.",
+                })}
+                {statsHeaderCell({
+                  label: 'Spawnable',
+                  width: '16%',
+                  align: 'middle-right',
+                  tooltip:
+                    'Spawnable\n\nThe highest level of this building you can encounter right now. Climbs as you beat buildings and grow your unlocked pool. Renaissance resets this pool — your builder level is unchanged but you have to climb back to face higher levels.',
+                })}
               </UiEntity>
 
               {BUILDING_CONFIGS.map((cfg) =>
@@ -1492,6 +1500,11 @@ function statsModal() {
                   yourMax: stats.maxBuildingLevel[cfg.entityName] ?? 0,
                   prestigedMax:
                     stats.prestigedMaxBuildingLevel[cfg.entityName] ?? 0,
+                  spawnable: highestSpawnableLevel(
+                    stats.availableBuildings,
+                    cfg.tier,
+                    BUILDING_CONFIGS.length
+                  ),
                 })
               )}
 
@@ -1599,6 +1612,7 @@ function buildingStatsRow(opts: {
   name: string
   yourMax: number
   prestigedMax: number
+  spawnable: number
 }) {
   const incomeMult = Math.pow(2, opts.prestigedMax)
   const afterMult = Math.pow(2, opts.yourMax)
@@ -1618,20 +1632,20 @@ function buildingStatsRow(opts: {
         value={opts.name}
         fontSize={13}
         color={black}
-        uiTransform={{ width: '50%', height: 20 }}
+        uiTransform={{ width: '38%', height: 20 }}
       />
       <Label
         value={`Lv ${opts.yourMax}`}
         fontSize={13}
         color={opts.yourMax > 0 ? piazzaRed : black}
-        uiTransform={{ width: '16%', height: 20 }}
+        uiTransform={{ width: '14%', height: 20 }}
         textAlign="middle-center"
       />
       <Label
         value={opts.prestigedMax > 0 ? `×${incomeMult}` : '—'}
         fontSize={11}
         color={black}
-        uiTransform={{ width: '17%', height: 20 }}
+        uiTransform={{ width: '15%', height: 20 }}
         textAlign="middle-right"
       />
       <Label
@@ -1640,6 +1654,58 @@ function buildingStatsRow(opts: {
         color={increases ? piazzaRed : black}
         uiTransform={{ width: '17%', height: 20 }}
         textAlign="middle-right"
+      />
+      <Label
+        value={opts.spawnable > 0 ? `Lv ${opts.spawnable}` : '—'}
+        fontSize={11}
+        color={black}
+        uiTransform={{ width: '16%', height: 20 }}
+        textAlign="middle-right"
+      />
+    </UiEntity>
+  )
+}
+
+// Top spawn-pool level this player can face for a building of the given
+// tier, given their availableBuildings counter (= highest unlocked pool
+// index). 1-indexed; 0 means "not yet in the pool".
+function highestSpawnableLevel(
+  availableBuildings: number,
+  tier: number,
+  buildingCount: number
+): number {
+  if (availableBuildings < tier - 1) return 0
+  return Math.floor((availableBuildings - (tier - 1)) / buildingCount) + 1
+}
+
+function statsHeaderCell(opts: {
+  label: string
+  width: any
+  align: 'middle-left' | 'middle-center' | 'middle-right'
+  tooltip: string
+}) {
+  return (
+    <UiEntity
+      uiTransform={{ width: opts.width, height: 20 }}
+      onMouseEnter={() => {
+        hoveredTooltip = opts.tooltip
+        hoveredIcon = null
+        hoveredTooltipAnchorRight = true
+      }}
+      onMouseLeave={() => {
+        if (hoveredTooltip === opts.tooltip) {
+          hoveredTooltip = null
+          hoveredIcon = null
+          hoveredTooltipAnchorRight = false
+        }
+      }}
+    >
+      <Label
+        value={opts.label}
+        fontSize={11}
+        color={black}
+        uiTransform={{ width: '100%', height: 20 }}
+        textAlign={opts.align}
       />
     </UiEntity>
   )
