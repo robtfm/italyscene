@@ -697,10 +697,20 @@ type UpgradeKey =
 async function handlePrestige(rawAddress: string) {
   const address = rawAddress.toLowerCase()
   const profile = await ensureProfile(address)
+  // Diff the new snapshot against the previous one so the client popup can
+  // call out which buildings actually bumped their income multiplier.
+  const prevSnapshot = profile.prestigedMaxBuildingLevel ?? {}
+  const newSnapshot = { ...profile.maxBuildingLevel }
+  const advances: { buildingKey: string; level: number }[] = []
+  for (const k of Object.keys(newSnapshot)) {
+    if (newSnapshot[k] > (prevSnapshot[k] ?? 0)) {
+      advances.push({ buildingKey: k, level: newSnapshot[k] })
+    }
+  }
   // Snapshot the current building maxes; this snapshot drives the 2^N
   // income bonus going forward. Future maxBuildingLevel growth doesn't
   // affect the bonus until the next prestige.
-  profile.prestigedMaxBuildingLevel = { ...profile.maxBuildingLevel }
+  profile.prestigedMaxBuildingLevel = newSnapshot
   profile.prestigeLevel = (profile.prestigeLevel ?? 0) + 1
   profile.lifetimeContributions = 0
   profile.bricksSpent = 0
@@ -719,6 +729,14 @@ async function handlePrestige(rawAddress: string) {
   profile.titheLevel = 0
   void saveProfile(address, profile)
   sendMyStats(rawAddress, profile)
+  room.send(
+    'prestigeResult',
+    {
+      prestigeLevel: profile.prestigeLevel,
+      advancesJson: JSON.stringify(advances),
+    },
+    { to: [rawAddress] }
+  )
   console.log('[SERVER]', address, 'prestiged')
 }
 

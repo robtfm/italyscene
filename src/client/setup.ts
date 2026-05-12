@@ -20,7 +20,7 @@ import {
 import { spawnPlaceholderBuildings } from '../shared/building-spawn'
 import { setupFlyingBricks } from './flying-bricks'
 import { brickPositions } from './brick-state'
-import { showBuildingAdvance } from './popup-state'
+import { showBuildingAdvance, showPrestigeResult } from './popup-state'
 import { pickupRadius } from '../shared/upgrades'
 
 const handledBricks = new Set<Entity>()
@@ -101,6 +101,9 @@ export function initClient() {
   setupFlyingBricks()
   room.onMessage('buildingMaxAdvanced', (data) => {
     showBuildingAdvance(data.buildingKey, data.level)
+  })
+  room.onMessage('prestigeResult', (data) => {
+    showPrestigeResult(data.prestigeLevel, data.advancesJson)
   })
   room.onMessage('myStatsUpdate', (data) => {
     const prevRadiusLevel = myStats.pickupRadiusLevel

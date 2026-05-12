@@ -69,6 +69,14 @@ export const Messages = {
     buildingKey: Schemas.String,
     level: Schemas.Int,
   }),
+  // Server -> the prestiging player: fires once their prestige goes through.
+  // advancesJson is a JSON-encoded array of { buildingKey, level } for every
+  // building whose snapshot bumped, used to summarise the income multiplier
+  // change.
+  prestigeResult: Schemas.Map({
+    prestigeLevel: Schemas.Int,
+    advancesJson: Schemas.String,
+  }),
 }
 
 export const room = registerMessages(Messages)

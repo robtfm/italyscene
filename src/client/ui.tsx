@@ -38,10 +38,7 @@ import {
   titheBonus,
 } from '../shared/upgrades'
 import { BUILDING_CONFIGS } from '../shared/buildings'
-import {
-  clearBuildingAdvance,
-  getBuildingAdvance,
-} from './popup-state'
+import { clearPopup, getPopup } from './popup-state'
 
 const COMPLETION_CELEBRATION_S = 10
 
@@ -373,11 +370,13 @@ const uiComponent = () => (
     {hoveredTooltip ? tooltipBox(hoveredTooltip) : null}
     {skillTreeOpen ? skillTreeModal() : null}
     {statsOpen ? statsModal() : null}
-    {getBuildingAdvance() ? buildingAdvanceToast() : null}
+    {getPopup() ? popupToast() : null}
   </UiEntity>
 )
 
-function buildingAdvanceToast() {
+function popupToast() {
+  const popup = getPopup()
+  if (!popup) return null
   return (
     <UiEntity
       uiTransform={{
@@ -390,11 +389,11 @@ function buildingAdvanceToast() {
       }}
       uiBackground={{ color: panelBlack }}
       onMouseDown={() => {
-        clearBuildingAdvance()
+        clearPopup()
       }}
     >
       {framedPanel({
-        width: 480,
+        width: 520,
         padding: 20,
         children: (
           <UiEntity
@@ -405,17 +404,30 @@ function buildingAdvanceToast() {
             }}
           >
             <Label
-              value={getBuildingAdvance() ?? ''}
+              value={popup.title}
               fontSize={20}
               color={black}
               uiTransform={{ width: '100%', height: 30 }}
               textAlign="middle-center"
             />
+            {popup.body.map((line) => (
+              <Label
+                value={line}
+                fontSize={13}
+                color={black}
+                uiTransform={{
+                  width: '100%',
+                  height: 22,
+                  margin: '4px 0 0 0',
+                }}
+                textAlign="middle-center"
+              />
+            ))}
             <Label
               value="Click anywhere to dismiss"
               fontSize={11}
               color={Color4.create(0, 0, 0, 0.6)}
-              uiTransform={{ width: '100%', height: 18, margin: '8px 0 0 0' }}
+              uiTransform={{ width: '100%', height: 18, margin: '12px 0 0 0' }}
               textAlign="middle-center"
             />
           </UiEntity>
@@ -1206,7 +1218,7 @@ function statsModal() {
               <Label
                 value={
                   stats.prestigeLevel > 0
-                    ? `Your stats — Prestige Lv ${stats.prestigeLevel}`
+                    ? `Your stats — Renaissance Lv ${stats.prestigeLevel}`
                     : 'Your stats'
                 }
                 fontSize={20}
@@ -1246,7 +1258,7 @@ function statsModal() {
                   textAlign="middle-right"
                 />
                 <Label
-                  value="After prestige"
+                  value="After Renaissance"
                   fontSize={11}
                   color={black}
                   uiTransform={{ width: '17%', height: 20 }}
@@ -1275,8 +1287,8 @@ function statsModal() {
               >
                 {roundedButton({
                   value: prestigeConfirming
-                    ? 'Confirm prestige?'
-                    : 'Prestige',
+                    ? 'Begin Renaissance?'
+                    : 'Renaissance',
                   // primary = filled red; use it whenever pressing it would
                   // do something useful (gain or commit a prestige bump).
                   variant:
