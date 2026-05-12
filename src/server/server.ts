@@ -966,7 +966,7 @@ function wantedIndicesFor(
   return out
 }
 
-async function pickNextBuildingKey(_currentKey: string): Promise<PoolEntry> {
+async function pickNextBuildingKey(currentKey: string): Promise<PoolEntry> {
   type Entry = { address: string; profile: PlayerProfile }
   const players: Entry[] = []
   for (const [_, identity] of engine.getEntitiesWith(PlayerIdentityData)) {
@@ -976,9 +976,11 @@ async function pickNextBuildingKey(_currentKey: string): Promise<PoolEntry> {
 
   // Base pool: every (building, level) index 0..maxAvail across present
   // players. Each seeded with 1/n weight so the base sums to a unit weight.
-  // We don't exclude the just-completed entry — it stays in the pool as a
-  // low-priority background option (most often pulled past by another
-  // player's wanted entries).
+  // The just-played building (any level) is dropped from the pool so we don't
+  // immediately re-roll the same one; if that empties the pool entirely (e.g.
+  // very early game) we fall back to it.
+  const isExcluded = (idx: number) =>
+    decodePoolIndex(idx)?.entityName === currentKey
   const maxAvail = players.reduce(
     (m, p) => Math.max(m, p.profile.availableBuildings),
     0
@@ -986,7 +988,10 @@ async function pickNextBuildingKey(_currentKey: string): Promise<PoolEntry> {
   const poolSize = maxAvail + 1
   const baseWeight = 1 / poolSize
   const weights = new Map<number, number>()
-  for (let i = 0; i <= maxAvail; i++) weights.set(i, baseWeight)
+  for (let i = 0; i <= maxAvail; i++) {
+    if (isExcluded(i)) continue
+    weights.set(i, baseWeight)
+  }
 
   // Each player adds (1 + pity) / |pool| to each entry in their pool.
   for (const p of players) {
@@ -994,11 +999,20 @@ async function pickNextBuildingKey(_currentKey: string): Promise<PoolEntry> {
     if (wanted.length === 0) continue
     const contribution = (1 + p.profile.pity) / wanted.length
     for (const idx of wanted) {
+      if (isExcluded(idx)) continue
       weights.set(idx, (weights.get(idx) ?? 0) + contribution)
     }
   }
 
   const total = [...weights.values()].reduce((a, b) => a + b, 0)
+  if (total <= 0) {
+    // Exclusion emptied the pool — fall back to the just-played entry at the
+    // lowest available level for it.
+    for (let i = 0; i <= maxAvail; i++) {
+      if (isExcluded(i)) return decodePoolIndex(i)!
+    }
+    return decodePoolIndex(0)!
+  }
   let r = Math.random() * total
   let chosenIdx = 0
   for (const [idx, w] of weights) {
