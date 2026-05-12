@@ -2,6 +2,7 @@ import {
   engine,
   Entity,
   InputAction,
+  Name,
   Transform,
   pointerEventsSystem,
 } from '@dcl/sdk/ecs'
@@ -134,6 +135,105 @@ export function initClient() {
   engine.addSystem(brickHandlerSystem)
   engine.addSystem(buildingVisualSystem)
   engine.addSystem(brickAnimSystem)
+  engine.addSystem(earthquakeSystem)
+}
+
+// Per-hill earthquake state. While any building is collapsing, each hill
+// picks a random point on a 0.1m sphere around its origin every 200ms and
+// linearly tweens toward it. Once no building is collapsing, hills tween
+// back to origin and idle.
+type Vec3 = { x: number; y: number; z: number }
+type HillJitter = {
+  origin: Vec3
+  from: Vec3
+  target: Vec3
+  startedAt: number
+  atRest: boolean
+}
+const hillJitter = new Map<Entity, HillJitter>()
+let hillCacheBuilt = false
+const JITTER_RADIUS_XZ = 0.1
+const JITTER_RADIUS_Y = 0.3
+const JITTER_DURATION_MS = 200
+
+function buildHillCache() {
+  for (const [entity] of engine.getEntitiesWith(Transform, Name)) {
+    const nm = Name.getOrNull(entity)?.value ?? ''
+    if (!nm.startsWith('Hill_') && !nm.startsWith('BigHill_')) continue
+    const t = Transform.get(entity)
+    const origin: Vec3 = { x: t.position.x, y: t.position.y, z: t.position.z }
+    hillJitter.set(entity, {
+      origin,
+      from: { ...origin },
+      target: { ...origin },
+      startedAt: 0,
+      atRest: true,
+    })
+  }
+  // Only mark as built once we've actually found hills — composite may not
+  // be loaded on the first tick.
+  if (hillJitter.size > 0) hillCacheBuilt = true
+}
+
+function randomOffset(): Vec3 {
+  // Uniform point on a unit sphere, then scaled per-axis so vertical jitter
+  // can exceed horizontal jitter.
+  const u = Math.random() * 2 - 1
+  const theta = Math.random() * Math.PI * 2
+  const r = Math.sqrt(1 - u * u)
+  return {
+    x: r * Math.cos(theta) * JITTER_RADIUS_XZ,
+    y: u * JITTER_RADIUS_Y,
+    z: r * Math.sin(theta) * JITTER_RADIUS_XZ,
+  }
+}
+
+function anyBuildingCollapsing(): boolean {
+  for (const [_, state] of engine.getEntitiesWith(BuildingState)) {
+    if (state.collapsing) return true
+  }
+  return false
+}
+
+function earthquakeSystem(_dt: number) {
+  if (!hillCacheBuilt) buildHillCache()
+  const collapsing = anyBuildingCollapsing()
+  const now = Date.now()
+  for (const [entity, jit] of hillJitter) {
+    if (jit.atRest && !collapsing) continue
+    const t = Transform.getMutableOrNull(entity)
+    if (!t) continue
+    const elapsed = now - jit.startedAt
+    if (elapsed >= JITTER_DURATION_MS) {
+      jit.from = { x: jit.target.x, y: jit.target.y, z: jit.target.z }
+      if (collapsing) {
+        const off = randomOffset()
+        jit.target = {
+          x: jit.origin.x + off.x,
+          y: jit.origin.y + off.y,
+          z: jit.origin.z + off.z,
+        }
+        jit.atRest = false
+      } else {
+        jit.target = { ...jit.origin }
+        // After this leg completes, we'll land exactly on origin and idle.
+      }
+      jit.startedAt = now
+    }
+    const frac = Math.min(1, (now - jit.startedAt) / JITTER_DURATION_MS)
+    t.position.x = jit.from.x + (jit.target.x - jit.from.x) * frac
+    t.position.y = jit.from.y + (jit.target.y - jit.from.y) * frac
+    t.position.z = jit.from.z + (jit.target.z - jit.from.z) * frac
+    if (!collapsing && frac >= 1) {
+      // Returned to origin — clamp exactly and stop animating.
+      t.position.x = jit.origin.x
+      t.position.y = jit.origin.y
+      t.position.z = jit.origin.z
+      jit.from = { ...jit.origin }
+      jit.target = { ...jit.origin }
+      jit.atRest = true
+    }
+  }
 }
 
 // Rotation runs server-side via Tween.setRotateContinuous (synced to clients).
