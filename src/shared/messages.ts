@@ -63,6 +63,12 @@ export const Messages = {
   // 2^max income multiplier per building on every brick the player
   // collects there.
   prestige: Schemas.Map({ ts: Schemas.Int }),
+  // Server -> single contributor: their per-building max just rose to this
+  // level. Drives the in-scene "Tower of Pisa Lv 3!" popup.
+  buildingMaxAdvanced: Schemas.Map({
+    buildingKey: Schemas.String,
+    level: Schemas.Int,
+  }),
 }
 
 export const room = registerMessages(Messages)

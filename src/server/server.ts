@@ -869,7 +869,13 @@ async function handleBuildingCompletion(cfg: BuildingConfig) {
 
     const currentMax = profile.maxBuildingLevel[cfg.entityName] ?? 0
     if (completedLevel >= currentMax) {
-      profile.maxBuildingLevel[cfg.entityName] = currentMax + 1
+      const newMax = currentMax + 1
+      profile.maxBuildingLevel[cfg.entityName] = newMax
+      room.send(
+        'buildingMaxAdvanced',
+        { buildingKey: cfg.entityName, level: newMax },
+        { to: [address] }
+      )
     }
     if (completedLevel >= highestUnlockedLevel(profile)) {
       profile.availableBuildings += 1

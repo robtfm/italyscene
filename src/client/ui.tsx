@@ -38,6 +38,10 @@ import {
   titheBonus,
 } from '../shared/upgrades'
 import { BUILDING_CONFIGS } from '../shared/buildings'
+import {
+  clearBuildingAdvance,
+  getBuildingAdvance,
+} from './popup-state'
 
 const COMPLETION_CELEBRATION_S = 10
 
@@ -139,6 +143,7 @@ function acknowledgePrestigeBenefits() {
 function isPreviewRealm(): boolean {
   return RealmInfo.getOrNull(engine.RootEntity)?.isPreview ?? false
 }
+
 
 // Auto-fire while the DEBUG brick button is held. setupUi installs a system
 // that sends one debugAddBrick every DEBUG_HOLD_INTERVAL_MS while held.
@@ -368,8 +373,57 @@ const uiComponent = () => (
     {hoveredTooltip ? tooltipBox(hoveredTooltip) : null}
     {skillTreeOpen ? skillTreeModal() : null}
     {statsOpen ? statsModal() : null}
+    {getBuildingAdvance() ? buildingAdvanceToast() : null}
   </UiEntity>
 )
+
+function buildingAdvanceToast() {
+  return (
+    <UiEntity
+      uiTransform={{
+        positionType: 'absolute',
+        width: '100%',
+        height: '100%',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 200,
+      }}
+      uiBackground={{ color: panelBlack }}
+      onMouseDown={() => {
+        clearBuildingAdvance()
+      }}
+    >
+      {framedPanel({
+        width: 480,
+        padding: 20,
+        children: (
+          <UiEntity
+            uiTransform={{
+              width: '100%',
+              flexDirection: 'column',
+              alignItems: 'center',
+            }}
+          >
+            <Label
+              value={getBuildingAdvance() ?? ''}
+              fontSize={20}
+              color={black}
+              uiTransform={{ width: '100%', height: 30 }}
+              textAlign="middle-center"
+            />
+            <Label
+              value="Click anywhere to dismiss"
+              fontSize={11}
+              color={Color4.create(0, 0, 0, 0.6)}
+              uiTransform={{ width: '100%', height: 18, margin: '8px 0 0 0' }}
+              textAlign="middle-center"
+            />
+          </UiEntity>
+        ),
+      })}
+    </UiEntity>
+  )
+}
 
 function topCenter() {
   const active = getActiveBuildingState()
