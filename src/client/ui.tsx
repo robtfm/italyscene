@@ -46,11 +46,24 @@ const panelGreen = Color4.create(0.06, 0.34, 0.18, 0.92)
 const panelCream = Color4.create(0.96, 0.95, 0.92, 0.96)
 const panelBlack = Color4.create(0, 0, 0, 0.55)
 const black = Color4.Black()
+// Warm parchment tone sampled from the upgrade icons.
+const parchment = Color4.fromHexString('#e0d0a0ff')
 
 let skillTreeOpen = false
 let statsOpen = false
 let prestigeConfirming = false
 let hoveredTooltip: string | null = null
+// Optional icon to show enlarged inside the tooltip — set in parallel with
+// hoveredTooltip when hovering an upgrade icon, cleared on mouse leave.
+let hoveredIcon: string | null = null
+// Extra left offset for the tooltip (pixels). Set when hovering elements
+// pinned to the right edge so the tooltip clears the panel they live in.
+let hoveredTooltipExtraLeft = 0
+// When true, the tooltip extends to the RIGHT of the cursor instead of
+// the left. Set on hover of elements pinned to the left side (skill-tree
+// level-up buttons sit on the right of the modal but display text best
+// to the right of the cursor since the modal is centered).
+let hoveredTooltipAnchorRight = false
 let hoveredCardIndex = 0
 const acknowledgedBuyables = new Set<string>()
 
@@ -97,23 +110,27 @@ function acknowledgeBuyables() {
 
 const CARD_TOP = 110
 const CARD_STRIDE = 110
-const CARD_WIDTH = 220
+const CARD_WIDTH = 170
 const CARD_RIGHT_MARGIN = 12
 
 const PANEL_OUTER_RADIUS = 12
 const PANEL_INNER_RADIUS = 8
 
 // Shared "green-frame around cream interior" panel used by every UI surface.
+// `transparent: true` skips both colors — useful for the right-edge cards
+// where we want the icons/values floating without a backdrop.
 type PanelProps = {
   width?: any
   padding?: any
   margin?: any
+  transparent?: boolean
   onMouseEnter?: () => void
   onMouseLeave?: () => void
   children?: any
 }
 function framedPanel(p: PanelProps) {
   const padding = p.padding ?? 6
+  const transparent = Color4.create(0, 0, 0, 0)
   return (
     <UiEntity
       uiTransform={{
@@ -122,7 +139,7 @@ function framedPanel(p: PanelProps) {
         margin: p.margin,
         borderRadius: PANEL_OUTER_RADIUS,
       }}
-      uiBackground={{ color: panelGreen }}
+      uiBackground={{ color: p.transparent ? transparent : panelGreen }}
       onMouseEnter={p.onMouseEnter}
       onMouseLeave={p.onMouseLeave}
     >
@@ -134,7 +151,7 @@ function framedPanel(p: PanelProps) {
           padding,
           borderRadius: PANEL_INNER_RADIUS,
         }}
-        uiBackground={{ color: panelCream }}
+        uiBackground={{ color: p.transparent ? transparent : panelCream }}
       >
         {p.children}
       </UiEntity>
@@ -300,6 +317,7 @@ type UpgradeInfo = {
   title: string
   description: string
   formatEffect: (level: number) => string
+  iconPath: string
 }
 const UPGRADE_INFO: Record<string, UpgradeInfo> = {
   multiBricks: {
@@ -310,42 +328,49 @@ const UPGRADE_INFO: Record<string, UpgradeInfo> = {
       const max = maxBrickStack(L)
       return max === 1 ? '1' : `1–${max}`
     },
+    iconPath: 'images/upgrades/brick_bonus.png',
   },
   pickupRadius: {
     title: "Builder's Reach",
     description:
       'Click bricks from further away. Personal — only your own level affects your reach.',
     formatEffect: (L) => `${pickupRadius(L).toFixed(1)} m`,
+    iconPath: 'images/upgrades/builders_reach.png',
   },
   fasterSpawns: {
     title: 'Supply Lines',
     description:
       'Bricks spawn more often. World-wide; harmonically stacked across active players.',
     formatEffect: (L) => `× ${spawnIntervalScale(L).toFixed(2)}`,
+    iconPath: 'images/upgrades/supply_lines.png',
   },
   leanDampener: {
     title: 'Scaffolding',
     description:
       'Buildings lean over more slowly. World-wide; harmonically stacked across active players.',
     formatEffect: (L) => `× ${leanRateScale(L).toFixed(2)}`,
+    iconPath: 'images/upgrades/scaffholding.png',
   },
   sturdyFoundation: {
     title: 'Opus Romano',
     description:
       'Buildings tolerate more lean before collapsing. World-wide; harmonically stacked.',
     formatEffect: (L) => `+${sturdyAngleBonus(L).toFixed(1)}°`,
+    iconPath: 'images/upgrades/opus_romano.png',
   },
   plumbLine: {
     title: 'Plumb Line',
     description:
       "Each brick YOU collect straightens lean by an extra %, multiplied on top of the building's per-brick straighten. Personal — only your level affects your bricks.",
     formatEffect: (L) => `+${(plumbLinePersonalBonus(L) * 100).toFixed(0)}%`,
+    iconPath: 'images/upgrades/plumb_line.png',
   },
   plumbTeacher: {
     title: 'Plumb Maestro',
     description:
       "A small percentage bonus on every brick's straighten, room-wide. World-wide; harmonically stacked.",
     formatEffect: (L) => `+${(plumbLineTeacherBonus(L) * 100).toFixed(0)}%`,
+    iconPath: 'images/upgrades/plumb_maestro.png',
   },
   generous: {
     title: 'Artful Contribution',
@@ -353,6 +378,7 @@ const UPGRADE_INFO: Record<string, UpgradeInfo> = {
       'Each brick YOU collect counts as more toward the building. Personal — only boosts the building, not your currency.',
     formatEffect: (L) =>
       `+${(contributionPersonalBonus(L) * 100).toFixed(0)}%`,
+    iconPath: 'images/upgrades/artful_contribution.png',
   },
   generousTeacher: {
     title: 'Artful Maestro',
@@ -360,18 +386,21 @@ const UPGRADE_INFO: Record<string, UpgradeInfo> = {
       'A small extra value bonus on EVERY brick collection in the room. World-wide; harmonically stacked.',
     formatEffect: (L) =>
       `+${(contributionTeacherBonus(L) * 100).toFixed(0)}%`,
+    iconPath: 'images/upgrades/artful_maestro.png',
   },
   stockpile: {
     title: 'Stockpile',
     description:
       'Raises the cap on how many bricks can be on the field at once. World-wide; harmonically stacked across active players.',
     formatEffect: (L) => `× ${brickCapMultiplier(L).toFixed(2)}`,
+    iconPath: 'images/upgrades/stockpile.png',
   },
   tithe: {
     title: "Padrone's Cut",
     description:
       "Keep a bigger cut of every brick you collect for upgrade currency. Doesn't help the building — only your spend power.",
     formatEffect: (L) => `+${(titheBonus(L) * 100).toFixed(0)}%`,
+    iconPath: 'images/upgrades/padrones_cut.png',
   },
 }
 
@@ -391,7 +420,10 @@ function rightEdge() {
         position: { top: CARD_TOP, right: CARD_RIGHT_MARGIN },
         width: CARD_WIDTH,
         flexDirection: 'column',
+        padding: 8,
+        borderRadius: PANEL_OUTER_RADIUS,
       }}
+      uiBackground={{ color: Color4.create(0, 0, 0, 0.35) }}
     >
       {sectionHeader('Global')}
       {powerupCard({
@@ -477,14 +509,14 @@ function sectionHeader(text: string) {
   return (
     <Label
       value={text}
-      fontSize={11}
+      fontSize={18}
       color={Color4.create(1, 1, 1, 0.85)}
       uiTransform={{
         width: '100%',
-        height: 18,
-        margin: '4px 0 4px 0',
+        height: 26,
+        margin: '6px 0 4px 0',
       }}
-      textAlign="middle-left"
+      textAlign="middle-center"
     />
   )
 }
@@ -506,6 +538,7 @@ function powerupCard(opts: {
     width: '100%',
     margin: '0 0 6px 0',
     padding: 0,
+    transparent: true,
     children: (
       <UiEntity
         uiTransform={{
@@ -517,9 +550,39 @@ function powerupCard(opts: {
       >
         <UiEntity
           uiTransform={{
+            flexGrow: 1,
+            height: 44,
+            alignItems: 'center',
+            justifyContent: 'center',
+            margin: '0 6px 0 0',
+          }}
+          onMouseEnter={() => {
+            hoveredTooltip = rightHover
+            hoveredIcon = opts.iconPath ?? null
+            hoveredTooltipExtraLeft = 70
+          }}
+          onMouseLeave={() => {
+            // Only clear if we're still the owner — guards against the
+            // adjacent region's onMouseEnter having already taken over.
+            if (hoveredTooltip === rightHover) {
+              hoveredTooltip = null
+              hoveredIcon = null
+              hoveredTooltipExtraLeft = 0
+            }
+          }}
+        >
+          <Label
+            value={opts.valueText}
+            fontSize={20}
+            color={parchment}
+            uiTransform={{ width: '100%', height: 26 }}
+            textAlign="middle-center"
+          />
+        </UiEntity>
+        <UiEntity
+          uiTransform={{
             width: 44,
             height: 44,
-            margin: '0 6px 0 0',
           }}
           uiBackground={{
             texture: { src: opts.iconPath ?? ICON_PLACEHOLDER },
@@ -527,33 +590,17 @@ function powerupCard(opts: {
           }}
           onMouseEnter={() => {
             hoveredTooltip = leftHover
+            hoveredIcon = opts.iconPath ?? null
+            hoveredTooltipExtraLeft = 140
           }}
           onMouseLeave={() => {
-            if (hoveredTooltip === leftHover) hoveredTooltip = null
+            if (hoveredTooltip === leftHover) {
+              hoveredTooltip = null
+              hoveredIcon = null
+              hoveredTooltipExtraLeft = 0
+            }
           }}
         />
-        <UiEntity
-          uiTransform={{
-            flexGrow: 1,
-            height: 44,
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-          onMouseEnter={() => {
-            hoveredTooltip = rightHover
-          }}
-          onMouseLeave={() => {
-            if (hoveredTooltip === rightHover) hoveredTooltip = null
-          }}
-        >
-          <Label
-            value={opts.valueText}
-            fontSize={14}
-            color={piazzaRed}
-            uiTransform={{ width: '100%', height: 22 }}
-            textAlign="middle-center"
-          />
-        </UiEntity>
       </UiEntity>
     ),
   })
@@ -561,15 +608,24 @@ function powerupCard(opts: {
 
 function tooltipBox(text: string) {
   const ptr = PrimaryPointerInfo.getOrNull(engine.RootEntity)
-  const tooltipWidth = 280
-  const tooltipHeightApprox = 80
+  const tooltipWidth = hoveredIcon ? 280 : 280
+  const iconSize = hoveredIcon ? 240 : 0
+  const tooltipHeightApprox = 80 + iconSize
   // Anchor RIGHT side of tooltip near cursor: tooltip extends to the left
   // and slightly above. Suits right-edge panels where extending rightward
   // would clip off-screen.
   let left = 32
   let top = 32
   if (ptr?.screenCoordinates) {
-    left = Math.max(8, ptr.screenCoordinates.x - tooltipWidth - 12)
+    left = hoveredTooltipAnchorRight
+      ? ptr.screenCoordinates.x + 16
+      : Math.max(
+          8,
+          ptr.screenCoordinates.x -
+            tooltipWidth -
+            12 -
+            hoveredTooltipExtraLeft
+        )
     top = Math.max(8, ptr.screenCoordinates.y - tooltipHeightApprox - 8)
   }
   return darkRoundedPanel({
@@ -581,12 +637,27 @@ function tooltipBox(text: string) {
       zIndex: 200,
     },
     children: (
-      <Label
-        value={text}
-        fontSize={11}
-        color={Color4.White()}
-        uiTransform={{ width: '100%' }}
-      />
+      <UiEntity uiTransform={{ width: '100%', flexDirection: 'column', alignItems: 'center' }}>
+        {hoveredIcon ? (
+          <UiEntity
+            uiTransform={{
+              width: iconSize,
+              height: iconSize,
+              margin: '0 0 6px 0',
+            }}
+            uiBackground={{
+              texture: { src: hoveredIcon },
+              textureMode: 'stretch',
+            }}
+          />
+        ) : null}
+        <Label
+          value={text}
+          fontSize={16}
+          color={Color4.White()}
+          uiTransform={{ width: '100%' }}
+        />
+      </UiEntity>
     ),
   })
 }
@@ -1092,6 +1163,7 @@ function skillRow(opts: {
   // When set, the upgrade is gated by a building level; replaces the button
   // label with "Beat <Building> Lv N" instead of "MAX" / cost text.
   lockReason?: string
+  iconPath?: string
   onBuy: () => void
 }) {
   const tooltip = `${opts.title}\n\n${opts.description}`
@@ -1113,14 +1185,31 @@ function skillRow(opts: {
       uiBackground={{ color: Color4.create(0, 0, 0, 0.05) }}
       onMouseEnter={() => {
         hoveredTooltip = tooltip
+        hoveredIcon = opts.iconPath ?? null
+        hoveredTooltipAnchorRight = true
       }}
       onMouseLeave={() => {
-        if (hoveredTooltip === tooltip) hoveredTooltip = null
+        if (hoveredTooltip === tooltip) {
+          hoveredTooltip = null
+          hoveredIcon = null
+          hoveredTooltipAnchorRight = false
+        }
       }}
     >
       <UiEntity
         uiTransform={{
-          width: 260,
+          width: 36,
+          height: 36,
+          margin: '0 6px 0 0',
+        }}
+        uiBackground={{
+          texture: { src: opts.iconPath ?? ICON_PLACEHOLDER },
+          textureMode: 'stretch',
+        }}
+      />
+      <UiEntity
+        uiTransform={{
+          width: 230,
           flexDirection: 'column',
         }}
       >
@@ -1143,8 +1232,11 @@ function skillRow(opts: {
           hoveredTooltip = buttonTooltip
         }}
         onMouseLeave={() => {
-          // Mouse leaves button but is still inside the row → restore row tooltip
-          hoveredTooltip = tooltip
+          // Mouse leaves button but is still inside the row → restore row
+          // tooltip. Anchor stays right (the row sets it on enter, clears
+          // on leave). Only restore if we're still the button's tooltip —
+          // guards against an adjacent row's enter having taken over.
+          if (hoveredTooltip === buttonTooltip) hoveredTooltip = tooltip
         }}
       >
         {roundedButton({
