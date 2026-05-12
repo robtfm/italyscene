@@ -5,9 +5,11 @@ export const Messages = {
   collectBrick: Schemas.Map({ brickId: Schemas.Int }),
   // Server broadcasts to all clients on each collection. Drives the visual
   // flight effect; no game-state side effect (state is already changed).
+  // y is not sent — server doesn't know it; clients look up the brick's
+  // local Transform y by brickId for the flight start position.
   brickCollected: Schemas.Map({
+    brickId: Schemas.Int,
     x: Schemas.Float,
-    y: Schemas.Float,
     z: Schemas.Float,
     value: Schemas.Int,
   }),

@@ -556,25 +556,20 @@ function spawnBrick() {
     if (Math.hypot(x - SPAWN_AREA.x, z - SPAWN_AREA.z) < SPAWN_AREA.clear) continue
     break
   }
-  const groundY = hillHeightAt(x, z)
   const eff = worldStateEntity
     ? WorldState.get(worldStateEntity).effectiveMultiBricksLevel
     : 0
   const value = rollBrickValue(eff)
-  createBrickEntity(x, groundY + BRICK_HOVER_HEIGHT, z, value)
+  createBrickEntity(x, z, value)
 }
 
-function createBrickEntity(x: number, y: number, z: number, value: number) {
+function createBrickEntity(x: number, z: number, value: number) {
   const entity = engine.addEntity()
   const brickId = nextBrickId++
-  Brick.create(entity, { brickId, value, spawnedAt: Date.now() })
-  // Visual height grows with stack value but caps so towers stay clickable.
-  const visualY = Math.min(3, 0.5 * value)
-  Transform.create(entity, {
-    position: { x, y, z },
-    scale: { x: 0.8, y: visualY, z: 1.2 },
-    rotation: { x: 0, y: Math.random() * Math.PI * 2, z: 0, w: 1 },
-  })
+  Brick.create(entity, { brickId, value, spawnedAt: Date.now(), x, z })
+  // Server doesn't render or simulate physics; visuals (mesh, material, tween)
+  // sync to clients and clients add a Transform locally once they raycast a
+  // ground/roof Y for (x, z).
   MeshRenderer.setBox(entity)
   MeshCollider.setBox(entity, ColliderLayer.CL_POINTER)
   const palette =
@@ -612,7 +607,6 @@ function createBrickEntity(x: number, y: number, z: number, value: number) {
   // direction sets axis (Y); speed is degrees/sec. 60°/s = full revolution per 6s.
   Tween.setRotateContinuous(entity, Quaternion.fromEulerDegrees(0, 1, 0), 60)
   syncEntity(entity, [
-    Transform.componentId,
     Brick.componentId,
     MeshRenderer.componentId,
     Material.componentId,
@@ -625,18 +619,13 @@ async function handleCollectBrick(brickId: number, playerAddress: string) {
   for (const [entity, b] of engine.getEntitiesWith(Brick)) {
     if (b.brickId !== brickId) continue
     const value = b.value || 1
-    const pos = Transform.getOrNull(entity)?.position
+    const x = b.x
+    const z = b.z
     await applyBrickAward(playerAddress, value)
     engine.removeEntity(entity)
-    if (pos) {
-      // Broadcast visual-only effect to all clients (no `to` = all peers).
-      room.send('brickCollected', {
-        x: pos.x,
-        y: pos.y,
-        z: pos.z,
-        value,
-      })
-    }
+    // Broadcast visual-only effect to all clients (no `to` = all peers).
+    // Receiving clients resolve start.y from their local entity's Transform.
+    room.send('brickCollected', { brickId, x, z, value })
     return
   }
   console.log('[SERVER] collectBrick: no entity with brickId', brickId)

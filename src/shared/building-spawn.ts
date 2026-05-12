@@ -2,6 +2,7 @@ import {
   engine,
   Transform,
   GltfContainer,
+  ColliderLayer,
   Name,
   TextShape,
 } from '@dcl/sdk/ecs'
@@ -43,7 +44,10 @@ function spawnOne(cfg: BuildingConfig) {
     ),
     parent: base,
   })
-  GltfContainer.create(visible, { src: ps.glbSrc })
+  GltfContainer.create(visible, {
+    src: ps.glbSrc,
+    visibleMeshesCollisionMask: ColliderLayer.CL_PHYSICS,
+  })
 }
 
 // Debug-only: a static, fully-grown copy of each building at its actual
@@ -69,7 +73,10 @@ function spawnPreviewCopy(cfg: BuildingConfig) {
       0
     ),
   })
-  GltfContainer.create(preview, { src: ps.glbSrc })
+  GltfContainer.create(preview, {
+    src: ps.glbSrc,
+    visibleMeshesCollisionMask: ColliderLayer.CL_PHYSICS,
+  })
 
   // Floating name label above the building (uses a generous fixed offset
   // that clears the tallest model with margin).

@@ -36,6 +36,10 @@ export const Brick = engine.defineComponent('italyscene:Brick', {
   brickId: Schemas.Int,
   value: Schemas.Int,
   spawnedAt: Schemas.Int64,
+  // Server-picked spawn XZ. Y is resolved per-client by a downward raycast
+  // (the server can't see physics colliders), so Transform isn't synced.
+  x: Schemas.Float,
+  z: Schemas.Float,
 })
 
 const fromServerOnly = (value: { senderAddress: string }) =>

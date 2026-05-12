@@ -2,9 +2,11 @@ import {
   engine,
   Entity,
   InputAction,
+  ColliderLayer,
   Name,
   Transform,
   pointerEventsSystem,
+  raycastSystem,
 } from '@dcl/sdk/ecs'
 import { Quaternion } from '@dcl/sdk/math'
 import { isStateSyncronized } from '@dcl/sdk/network'
@@ -17,6 +19,7 @@ import {
 } from '../shared/buildings'
 import { spawnPlaceholderBuildings } from '../shared/building-spawn'
 import { setupFlyingBricks } from './flying-bricks'
+import { brickPositions } from './brick-state'
 import { pickupRadius } from '../shared/upgrades'
 
 const handledBricks = new Set<Entity>()
@@ -136,6 +139,101 @@ export function initClient() {
   engine.addSystem(buildingVisualSystem)
   engine.addSystem(brickAnimSystem)
   engine.addSystem(earthquakeSystem)
+  engine.addSystem(brickPositionSystem)
+}
+
+// Synced brick entities arrive without a Transform — server doesn't know the
+// Y because it can't see physics colliders. For each new Brick we raycast
+// downward at (brick.x, brick.z) and, when the result comes back, add a
+// local Transform so the brick renders at the actual surface (hill, building
+// roof, etc.). brickPositions tracks the resolved start position so the
+// flying-brick collection visual can find the brick's y after it's removed.
+const BRICK_RAYCAST_FROM_Y = 100
+const BRICK_RAYCAST_MAX_DISTANCE = 200
+const BRICK_HOVER_HEIGHT = 1.2
+const pendingBrickRaycast = new Map<Entity, Entity>() // brick -> helper
+const brickInitialized = new Set<Entity>() // bricks we've already placed
+let brickRecheckCursor = 0
+
+type BrickValue = { brickId: number; value: number; x: number; z: number }
+
+function queueBrickRaycast(entity: Entity, brick: BrickValue) {
+  if (pendingBrickRaycast.has(entity)) return
+  const helper = engine.addEntity()
+  Transform.create(helper, {
+    position: { x: brick.x, y: BRICK_RAYCAST_FROM_Y, z: brick.z },
+  })
+  pendingBrickRaycast.set(entity, helper)
+  const { brickId, x, z } = brick
+  raycastSystem.registerGlobalDirectionRaycast(
+    {
+      entity: helper,
+      opts: {
+        direction: { x: 0, y: -1, z: 0 },
+        maxDistance: BRICK_RAYCAST_MAX_DISTANCE,
+        collisionMask: ColliderLayer.CL_PHYSICS,
+        continuous: false,
+      },
+    },
+    (result) => {
+      const finish = () => {
+        engine.removeEntity(helper)
+        pendingBrickRaycast.delete(entity)
+      }
+      if (!Brick.getOrNull(entity)) return finish()
+      const surfaceY = result.hits?.[0]?.position?.y
+      if (surfaceY === undefined) return finish()
+      const y = surfaceY + BRICK_HOVER_HEIGHT
+      const t = Transform.getMutableOrNull(entity)
+      if (t) {
+        t.position.y = y
+        // Keep the bob animation following the new baseline.
+        const anim = brickAnim.get(entity)
+        if (anim) anim.baseY = y
+        brickPositions.set(brickId, { x, y, z })
+      }
+      finish()
+    }
+  )
+}
+
+function brickPositionSystem(_dt: number) {
+  // Initialise new bricks: place at correct XZ + placeholder Y, queue raycast.
+  for (const [entity, brick] of engine.getEntitiesWith(Brick)) {
+    if (brickInitialized.has(entity)) continue
+    if (pendingBrickRaycast.has(entity)) continue
+    brickInitialized.add(entity)
+    const visualY = Math.min(3, 0.5 * brick.value)
+    Transform.createOrReplace(entity, {
+      position: { x: brick.x, y: BRICK_HOVER_HEIGHT, z: brick.z },
+      scale: { x: 0.8, y: visualY, z: 1.2 },
+      rotation: Quaternion.fromEulerDegrees(0, Math.random() * 360, 0),
+    })
+    queueBrickRaycast(entity, brick)
+  }
+
+  // Re-check one initialised brick per tick (round-robin) so bricks track
+  // buildings that have risen under them or fallen out from under them.
+  const ready: Array<[Entity, BrickValue]> = []
+  for (const [e, b] of engine.getEntitiesWith(Brick)) {
+    if (brickInitialized.has(e) && !pendingBrickRaycast.has(e)) ready.push([e, b])
+  }
+  if (ready.length > 0) {
+    const [entity, brick] = ready[brickRecheckCursor % ready.length]
+    brickRecheckCursor++
+    queueBrickRaycast(entity, brick)
+  }
+
+  // Clean up helpers for bricks that vanished before their raycast finished.
+  for (const [entity, helper] of pendingBrickRaycast) {
+    if (!Brick.getOrNull(entity)) {
+      engine.removeEntity(helper)
+      pendingBrickRaycast.delete(entity)
+    }
+  }
+  for (const entity of brickInitialized) {
+    if (!Brick.getOrNull(entity)) brickInitialized.delete(entity)
+  }
 }
 
 // Per-hill earthquake state. While any building is collapsing, each hill
@@ -264,6 +362,9 @@ function brickHandlerSystem() {
   const radius = pickupRadius(myStats.pickupRadiusLevel)
   for (const [entity] of engine.getEntitiesWith(Brick)) {
     if (handledBricks.has(entity)) continue
+    // Transform is added locally after the raycast resolves — registering
+    // proximity-enter before that yields no useful collision shape.
+    if (!Transform.getOrNull(entity)) continue
     const brick = Brick.getOrNull(entity)
     if (!brick) continue
     pointerEventsSystem.onProximityEnter(

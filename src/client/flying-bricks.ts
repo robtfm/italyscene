@@ -9,6 +9,7 @@ import { Color4, Vector3 } from '@dcl/sdk/math'
 import { WorldState } from '../shared/schemas'
 import { BUILDING_CONFIGS } from '../shared/buildings'
 import { room } from '../shared/messages'
+import { brickPositions } from './brick-state'
 
 // Each brick takes FLIGHT_MS ms to reach the tower; bricks within a stack
 // are staggered by STAGGER_MS so a value=N pickup looks like N bricks
@@ -39,7 +40,14 @@ export function setupFlyingBricks() {
   room.onMessage('brickCollected', (data) => {
     const target = currentBuildingTarget()
     if (!target) return
-    const start = Vector3.create(data.x, data.y, data.z)
+    // Server doesn't know the brick's local Y (raycasted client-side per
+    // brick); look it up by brickId. Fall back to a low y above ground if
+    // the entry is missing (e.g., raycast hadn't resolved before pickup).
+    const stored = brickPositions.get(data.brickId)
+    brickPositions.delete(data.brickId)
+    const start = stored
+      ? Vector3.create(stored.x, stored.y, stored.z)
+      : Vector3.create(data.x, 1.2, data.z)
     const value = Math.max(1, data.value)
     const now = Date.now()
     for (let i = 0; i < value; i++) {
