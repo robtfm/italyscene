@@ -21,6 +21,7 @@ import {
   BuildingConfig,
   bricksRequiredFor,
   brickStraightenFor,
+  COMPLETION_CELEBRATION_S,
 } from '../shared/buildings'
 import { spawnPlaceholderBuildings } from '../shared/building-spawn'
 import {
@@ -139,7 +140,13 @@ async function loadLeaderboards() {
   leaderboardsLoaded = true
 }
 
-function saveLeaderboards() {
+let leaderboardsDirty = false
+function markLeaderboardsDirty() {
+  leaderboardsDirty = true
+}
+function flushLeaderboardsIfDirty() {
+  if (!leaderboardsDirty) return
+  leaderboardsDirty = false
   const obj: Record<string, LBEntry[]> = {}
   for (const [k, v] of leaderboards) obj[k] = v
   void Storage.set(LEADERBOARD_KEY, JSON.stringify(obj))
@@ -304,10 +311,9 @@ async function maybeUpdateLeaderboards(
     if (score <= 0) continue
     if (updateLeaderboard(cat, address, score, now)) dirty = true
   }
-  if (dirty) saveLeaderboards()
+  if (dirty) markLeaderboardsDirty()
 }
 const WORLD_KEY = 'worldState'
-const COMPLETION_CELEBRATION_S = 10
 const WORLD_SAVE_INTERVAL_S = 3
 const FAST_FORWARD_CAP_S = 30 * 60
 
@@ -520,6 +526,7 @@ function worldSaveSystem(dt: number) {
   if (worldSaveTimer < WORLD_SAVE_INTERVAL_S) return
   worldSaveTimer = 0
   void saveWorldState()
+  flushLeaderboardsIfDirty()
 }
 
 type NextEffectives = {
@@ -894,32 +901,28 @@ async function applyBrickAward(playerAddress: string, baseValue: number) {
   )
 
   incrementBrickCount(buildingValue, straightenMultiplier)
-  // All-time leaderboard counter tracks bricks fed into buildings — use the
-  // post-straighten buildingValue (what actually reached the building), not
-  // the personal credit that has tithe + prestige scaling.
-  await bumpBricksContributedAllTime(playerAddress, buildingValue)
-  creditPlayer(playerAddress, creditValue)
+  // Single profile save per collection (was two: one for the all-time
+  // leaderboard counter, one for the personal credit) — both now mutate the
+  // same profile and we save once at the end.
+  await applyPlayerBrickEarnings(playerAddress, buildingValue, creditValue)
 }
 
-async function bumpBricksContributedAllTime(
+async function applyPlayerBrickEarnings(
   rawAddress: string,
-  amount: number
+  buildingValue: number,
+  creditValue: number
 ) {
-  const address = rawAddress.toLowerCase()
-  const profile = await ensureProfile(address)
-  profile.bricksContributedAllTime =
-    (profile.bricksContributedAllTime ?? 0) + amount
-  void saveProfile(address, profile)
-  void maybeUpdateLeaderboards(rawAddress, profile)
-}
-
-async function creditPlayer(rawAddress: string, amount: number) {
   const address = rawAddress.toLowerCase()
   currentRoundContributors.add(address)
   const profile = await ensureProfile(address)
-  profile.lifetimeContributions += amount
+  // Leaderboard counter: post-straighten buildingValue (what reached the
+  // building), not the credit value (which has tithe + prestige scaling).
+  profile.bricksContributedAllTime =
+    (profile.bricksContributedAllTime ?? 0) + buildingValue
+  profile.lifetimeContributions += creditValue
   void saveProfile(address, profile)
   sendMyStats(rawAddress, profile)
+  void maybeUpdateLeaderboards(rawAddress, profile)
 }
 
 type UpgradeKey =

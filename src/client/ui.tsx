@@ -44,11 +44,12 @@ import {
   sturdyAngleBonus,
   titheBonus,
 } from '../shared/upgrades'
-import { BUILDING_CONFIGS } from '../shared/buildings'
+import {
+  BUILDING_CONFIGS,
+  COMPLETION_CELEBRATION_S,
+} from '../shared/buildings'
 import { clearPopup, getPopup } from './popup-state'
 import { getLeaderboardSnapshot } from './leaderboard-state'
-
-const COMPLETION_CELEBRATION_S = 10
 
 const piazzaRed = Color4.fromHexString('#c8233bff')
 const panelGreen = Color4.create(0.06, 0.34, 0.18, 0.92)

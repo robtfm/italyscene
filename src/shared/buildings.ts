@@ -38,6 +38,20 @@ export type BuildingConfig = {
   }
 }
 
+// How long the post-completion celebration holds before the next pick.
+export const COMPLETION_CELEBRATION_S = 10
+
+// Sum of tip + hold + sink for a building's collapse animation. Server uses
+// it to time the async transition; client effects (skybox, particles) use
+// it to drive the same duration.
+export function collapseAnimTotalSec(cfg: BuildingConfig): number {
+  return (
+    cfg.collapseAnimDuration +
+    cfg.collapseHoldDuration +
+    cfg.collapseSinkDuration
+  )
+}
+
 export const PISA: BuildingConfig = {
   entityName: 'TowerOfPisa',
   baseEntityName: 'TowerOfPisa_Base',

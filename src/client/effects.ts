@@ -7,11 +7,17 @@ import {
   Entity,
   Material,
   MeshRenderer,
+  SkyboxTime,
   Transform,
 } from '@dcl/sdk/ecs'
 import { Color4, Quaternion } from '@dcl/sdk/math'
 import { BuildingState } from '../shared/schemas'
-import { BUILDING_CONFIGS, BuildingConfig } from '../shared/buildings'
+import {
+  BUILDING_CONFIGS,
+  BuildingConfig,
+  COMPLETION_CELEBRATION_S,
+} from '../shared/buildings'
+import { getActiveBuildingState } from './setup'
 
 type Particle = {
   entity: Entity
@@ -48,6 +54,87 @@ function configByEntityName(name: string): BuildingConfig | undefined {
 export function setupEffects() {
   engine.addSystem(particleSystem)
   engine.addSystem(buildingEventEffectsSystem)
+  engine.addSystem(timeOfDaySystem)
+}
+
+// SkyboxTime drives the day/night cycle. Active building's lean maps the
+// time of day: lean=0 → noon, lean=collapseAngle → 6pm. On completion the
+// sky cycles forward through the night to noon the next day over the 10s
+// celebration window. TransitionMode 0 = TM_FORWARD, 1 = TM_BACKWARD.
+const NOON = 12 * 3600
+const TM_FORWARD = 0
+const TM_BACKWARD = 1
+
+// Collapse cycle runs for COLLAPSE_CYCLE_DURATION_S regardless of when the
+// actual collapse animation finishes, so the sky keeps moving through the
+// night even after the next building has spawned — matches the 10s feel of
+// the completion cycle.
+const COLLAPSE_CYCLE_DURATION_S = 10
+
+let lastTimeOfDaySec = NOON
+let prevCompleting = false
+let prevCollapsing = false
+let completionAnchorSec = NOON
+let collapseAnchorSec = NOON
+let collapseCycleTimer = 0
+let collapseCycleActive = false
+
+function cycleToNoonNextDay(anchor: number, f: number): number {
+  const raw = NOON + 86400 - anchor
+  const distance = raw <= 0 ? 86400 : raw
+  return (anchor + Math.min(1, Math.max(0, f)) * distance) % 86400
+}
+
+function timeOfDaySystem(dt: number) {
+  const active = getActiveBuildingState()
+  const collapsingNow = active?.collapsing ?? false
+  const completingNow =
+    active != null && active.completedTime > 0 && !collapsingNow
+
+  // Arm the collapse cycle on the false → true edge; let it run for a fixed
+  // window even after the active building has been replaced.
+  if (collapsingNow && !prevCollapsing) {
+    collapseCycleActive = true
+    collapseCycleTimer = 0
+    collapseAnchorSec = lastTimeOfDaySec
+  }
+  if (collapseCycleActive) {
+    collapseCycleTimer += dt
+    if (collapseCycleTimer >= COLLAPSE_CYCLE_DURATION_S) {
+      collapseCycleActive = false
+    }
+  }
+
+  let target = NOON
+  let mode = TM_FORWARD
+  if (completingNow && active) {
+    if (!prevCompleting) completionAnchorSec = lastTimeOfDaySec
+    target = cycleToNoonNextDay(
+      completionAnchorSec,
+      active.completedTime / COMPLETION_CELEBRATION_S
+    )
+    mode = TM_FORWARD
+  } else if (collapseCycleActive) {
+    target = cycleToNoonNextDay(
+      collapseAnchorSec,
+      collapseCycleTimer / COLLAPSE_CYCLE_DURATION_S
+    )
+    mode = TM_FORWARD
+  } else if (active) {
+    const denom = Math.max(1, active.collapseAngleDeg)
+    const ratio = Math.min(1, Math.max(0, active.displayLean / denom))
+    target = NOON + ratio * 6 * 3600
+    mode = target >= lastTimeOfDaySec ? TM_FORWARD : TM_BACKWARD
+  }
+
+  prevCompleting = completingNow
+  prevCollapsing = collapsingNow
+
+  SkyboxTime.createOrReplace(engine.RootEntity, {
+    fixedTime: Math.floor(target),
+    transitionMode: mode,
+  })
+  lastTimeOfDaySec = target
 }
 
 function particleSystem(dt: number) {
