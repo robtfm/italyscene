@@ -178,7 +178,7 @@ export function harmonicSum(levels: number[]): number {
 // Average is ~1.0× across the 11 upgrades.
 const UPGRADE_COST_MULTIPLIERS: Record<string, number> = {
   titheLevel: 2.0, // pure currency multiplier
-  multiBricksLevel: 1.5, // boosts both progress + currency per stack
+  multiBricksLevel: 1.0, // boosts both progress + currency per stack
   fasterSpawnsLevel: 1.2, // late-game enabler
   plumbTeacherLevel: 1.0,
   leanDampenerLevel: 0.9,
