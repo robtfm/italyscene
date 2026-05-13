@@ -22,6 +22,7 @@ import { setupFlyingBricks } from './flying-bricks'
 import { brickPositions } from './brick-state'
 import { setupEffects } from './effects'
 import { setupAudio, playGlobal } from './audio'
+import { detectRenderer } from './renderer'
 import { showBuildingAdvance, showPrestigeResult } from './popup-state'
 import { setLeaderboardSnapshot } from './leaderboard-state'
 import { pickupRadius } from '../shared/upgrades'
@@ -104,6 +105,7 @@ export function getMyStats(): MyStats {
 
 export function initClient() {
   console.log('[CLIENT] initClient')
+  void detectRenderer()
   spawnPlaceholderBuildings()
   setupFlyingBricks()
   setupEffects()

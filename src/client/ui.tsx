@@ -51,6 +51,7 @@ import {
 import { clearPopup, getPopup } from './popup-state'
 import { getLeaderboardSnapshot } from './leaderboard-state'
 import { playGlobal } from './audio'
+import { flipPointerY } from './renderer'
 
 const piazzaRed = Color4.fromHexString('#c8233bff')
 const panelGreen = Color4.create(0.06, 0.34, 0.18, 0.92)
@@ -1663,7 +1664,7 @@ function tooltipBox(text: string) {
             12 -
             hoveredTooltipExtraLeft
         )
-    top = Math.max(8, ptr.screenCoordinates.y - tooltipHeightApprox - 8)
+    top = Math.max(8, flipPointerY(ptr.screenCoordinates.y) - tooltipHeightApprox - 8)
   }
   return darkRoundedPanel({
     uiTransform: {
