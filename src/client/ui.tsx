@@ -518,10 +518,14 @@ function popupToast() {
                 value={line}
                 fontSize={13}
                 color={black}
+                // height: 'auto' so the Label grows with wrapped lines using
+                // the renderer's own line-spacing; paragraph gap is the
+                // outer margin so within-line spacing and between-paragraph
+                // spacing read consistently.
                 uiTransform={{
                   width: '100%',
-                  height: 22,
-                  margin: '4px 0 0 0',
+                  height: 'auto',
+                  margin: '10px 0 0 0',
                 }}
                 textAlign="middle-center"
               />
@@ -1767,6 +1771,17 @@ function bottomActions() {
             },
             onMouseLeave: () => {
               debugAddBrickHeld = false
+            },
+          })
+        : null}
+      {isPreviewRealm()
+        ? roundedButton({
+            value: 'DEBUG: wipe profile',
+            variant: 'secondary',
+            margin: '0 4px',
+            fontSize: 11,
+            onMouseDown: () => {
+              room.send('debugWipeProfile', { ts: Date.now() })
             },
           })
         : null}

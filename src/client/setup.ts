@@ -23,7 +23,11 @@ import { brickPositions } from './brick-state'
 import { setupEffects } from './effects'
 import { setupAudio, playGlobal } from './audio'
 import { detectRenderer } from './renderer'
-import { showBuildingAdvance, showPrestigeResult } from './popup-state'
+import {
+  showBuildingAdvance,
+  showPrestigeResult,
+  showWelcome,
+} from './popup-state'
 import { setLeaderboardSnapshot } from './leaderboard-state'
 import { pickupRadius } from '../shared/upgrades'
 
@@ -117,6 +121,9 @@ export function initClient() {
   room.onMessage('prestigeResult', (data) => {
     showPrestigeResult(data.prestigeLevel, data.advancesJson)
     playGlobal('renaissance')
+  })
+  room.onMessage('welcomeNewPlayer', () => {
+    showWelcome()
   })
   room.onMessage('leaderboardSnapshot', (data) => {
     try {

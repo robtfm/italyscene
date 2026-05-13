@@ -33,6 +33,18 @@ export function showBuildingAdvance(buildingKey: string, level: number) {
   }
 }
 
+export function showWelcome() {
+  active = {
+    title: 'Welcome to Marble & Mortar',
+    body: [
+      'Collect bricks scattered around you — each one raises the active Italian landmark and straightens its lean.',
+      'Buildings collapse if they lean too far. Beat them at higher levels to unlock the next.',
+      'Spend bricks on permanent upgrades in the Skill tree, or trigger a Renaissance from the Character page to compound your gains.',
+      'Strive to become a legend of the Renaissance.',
+    ],
+  }
+}
+
 export function showPrestigeResult(
   prestigeLevel: number,
   advancesJson: string

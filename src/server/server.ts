@@ -586,8 +586,39 @@ function sendMyStats(rawAddress: string, profile: PlayerProfile) {
 
 async function initPlayer(rawAddress: string) {
   const address = rawAddress.toLowerCase()
+  const isNew = !(await profileExistsInStorage(address))
   const profile = await ensureProfile(address)
   sendMyStats(rawAddress, profile)
+  if (isNew) {
+    room.send('welcomeNewPlayer', { ts: Date.now() }, { to: [rawAddress] })
+  }
+}
+
+async function handleDebugWipeProfile(rawAddress: string) {
+  const address = rawAddress.toLowerCase()
+  try {
+    await Storage.player.delete(address, PROFILE_KEY)
+  } catch (e) {
+    console.log('[SERVER] wipe profile error', address, e)
+  }
+  // Drop the cached promise so the next ensureProfile re-loads (and gets a
+  // fresh default since storage is now empty).
+  profilePromises.delete(address)
+  const profile = await ensureProfile(address)
+  sendMyStats(rawAddress, profile)
+  room.send('welcomeNewPlayer', { ts: Date.now() }, { to: [rawAddress] })
+  console.log('[SERVER]', address, 'profile wiped (debug)')
+}
+
+async function profileExistsInStorage(address: string): Promise<boolean> {
+  try {
+    const raw = await Storage.player.get<string>(address, PROFILE_KEY)
+    if (!raw) return false
+    const parsed = JSON.parse(raw)
+    return typeof parsed?.lifetimeContributions === 'number'
+  } catch {
+    return false
+  }
 }
 
 function playerJoinSystem() {
@@ -664,6 +695,9 @@ export async function initServer() {
   })
   room.onMessage('leaderboardRequest', (data, context) => {
     if (context) void handleLeaderboardRequest(context.from, data.category)
+  })
+  room.onMessage('debugWipeProfile', (_data, context) => {
+    if (context) void handleDebugWipeProfile(context.from)
   })
 
   engine.addSystem(brickSpawnSystem)

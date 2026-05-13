@@ -108,6 +108,13 @@ export const Messages = {
     myName: Schemas.String,
     myAvatarUrl: Schemas.String,
   }),
+  // Server -> caller: fired once on first connection (no stored profile)
+  // so the client can show the onboarding popup.
+  welcomeNewPlayer: Schemas.Map({ ts: Schemas.Int }),
+  // Preview-only: wipe the calling player's stored profile so the next
+  // join shows the welcome popup again. Server clears the cached promise
+  // and re-sends a fresh-default sendMyStats.
+  debugWipeProfile: Schemas.Map({ ts: Schemas.Int }),
 }
 
 export const room = registerMessages(Messages)
