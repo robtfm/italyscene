@@ -481,6 +481,19 @@ function popupToast() {
               alignItems: 'center',
             }}
           >
+            {popup.imageSrc ? (
+              <UiEntity
+                uiTransform={{
+                  width: 300,
+                  height: 180,
+                  margin: '0 0 8px 0',
+                }}
+                uiBackground={{
+                  texture: { src: popup.imageSrc },
+                  textureMode: 'stretch',
+                }}
+              />
+            ) : null}
             <Label
               value={popup.title}
               fontSize={20}
@@ -1068,24 +1081,7 @@ function leaderboardRow(opts: {
 
 function topCenter() {
   const active = getActiveBuildingState()
-  // level field starts at 0 (first attempt) and increments per completion;
-  // display 1-indexed so "Lv 1" is the fresh starting point.
-  const titleWithLevel = active
-    ? `${active.displayName} Lv ${active.level + 1}`
-    : null
-  const completionLine =
-    active === null
-      ? 'Building: …'
-      : active.collapsing
-      ? `${titleWithLevel}: COLLAPSING!!!`
-      : active.completedTime > 0
-      ? `${titleWithLevel}: COMPLETE — next in ${Math.max(
-          0,
-          COMPLETION_CELEBRATION_S - active.completedTime
-        ).toFixed(1)}s`
-      : `${titleWithLevel}: ${Math.round(
-          active.riseProgress * 100
-        )}% (${active.bricksRequired} bricks)`
+  // level is 0-indexed in state; display 1-indexed (Lv 1 = fresh start).
 
   function leanFraction(
     a: NonNullable<ReturnType<typeof getActiveBuildingState>>
@@ -1123,44 +1119,166 @@ function topCenter() {
         alignItems: 'center',
       }}
     >
-      {framedPanel({
-        width: 380,
-        padding: 8,
-        children: (
+      {(() => {
+        const bricksCollected = getBrickCount()
+        const remaining = active
+          ? Math.max(0, active.bricksRequired - bricksCollected)
+          : 0
+        const pct = active ? Math.round(active.riseProgress * 100) : 0
+        const stateLabel: string | null =
+          active === null
+            ? null
+            : active.collapsing
+            ? 'COLLAPSING!!!'
+            : active.completedTime > 0
+            ? `COMPLETE — next in ${Math.max(
+                0,
+                COMPLETION_CELEBRATION_S - active.completedTime
+              ).toFixed(1)}s`
+            : null
+        const stateColor =
+          active?.collapsing || (active && active.completedTime > 0)
+            ? piazzaRed
+            : black
+        return (
           <UiEntity
             uiTransform={{
-              width: '100%',
+              width: 460,
+              height: 200,
+              padding: 18,
               flexDirection: 'column',
               alignItems: 'center',
             }}
+            uiBackground={{
+              texture: { src: 'images/blank_book.png' },
+              textureMode: 'stretch',
+            }}
           >
-            <Label
-              value={completionLine}
-              fontSize={16}
-              color={
-                active?.collapsing
-                  ? piazzaRed
-                  : active && active.completedTime > 0
-                  ? piazzaRed
-                  : black
-              }
-              uiTransform={{ width: '100%', height: 22 }}
-            />
-            <Label
-              value={`Lean: ${leanDescription(active)}`}
-              fontSize={12}
-              color={leanColor(active)}
-              uiTransform={{ width: '100%', height: 18 }}
-            />
-            <Label
-              value={`Bricks collected: ${getBrickCount()}    Your bricks: ${getMyContribution()}`}
-              fontSize={13}
-              color={black}
-              uiTransform={{ width: '100%', height: 20 }}
-            />
+            {/* Title bar: "Marble" left page, "&" on the spine, "Mortar" right */}
+            <UiEntity
+              uiTransform={{
+                width: '100%',
+                flexDirection: 'row',
+                alignItems: 'center',
+                margin: '0 0 12px 0',
+              }}
+            >
+              <Label
+                value="Marble"
+                fontSize={40}
+                color={black}
+                uiTransform={{ width: '45%', height: 52 }}
+                textAlign="middle-right"
+              />
+              <Label
+                value="&"
+                fontSize={40}
+                color={black}
+                uiTransform={{ width: '10%', height: 52 }}
+                textAlign="middle-center"
+              />
+              <Label
+                value="Mortar"
+                fontSize={40}
+                color={black}
+                uiTransform={{ width: '45%', height: 52 }}
+                textAlign="middle-left"
+              />
+            </UiEntity>
+            {/* Body: two pages side by side */}
+            <UiEntity
+              uiTransform={{
+                width: '100%',
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexGrow: 1,
+              }}
+            >
+            {/* Left page: building name */}
+            <UiEntity
+              uiTransform={{
+                width: '50%',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Label
+                value={active?.displayName ?? '…'}
+                fontSize={22}
+                color={black}
+                uiTransform={{ width: '100%', height: 40 }}
+                textAlign="middle-center"
+              />
+              <Label
+                value={`Lean: ${leanDescription(active)}`}
+                fontSize={15}
+                color={leanColor(active)}
+                uiTransform={{ width: '100%', height: 22, margin: '4px 0 0 0' }}
+                textAlign="middle-center"
+              />
+            </UiEntity>
+            {/* Right page: stats */}
+            <UiEntity
+              uiTransform={{
+                width: '50%',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              {stateLabel ? (
+                <Label
+                  value={stateLabel}
+                  fontSize={18}
+                  color={stateColor}
+                  uiTransform={{ width: '100%', height: 28 }}
+                  textAlign="middle-center"
+                />
+              ) : (
+                <UiEntity
+                  uiTransform={{
+                    width: '100%',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                  }}
+                >
+                  <Label
+                    value={active ? `Lv ${active.level + 1}` : '—'}
+                    fontSize={17}
+                    color={black}
+                    uiTransform={{ width: '100%', height: 24 }}
+                    textAlign="middle-center"
+                  />
+                  <Label
+                    value={active ? `${pct}% complete` : ''}
+                    fontSize={15}
+                    color={black}
+                    uiTransform={{ width: '100%', height: 22 }}
+                    textAlign="middle-center"
+                  />
+                  <Label
+                    value={active ? `${remaining} bricks left` : ''}
+                    fontSize={15}
+                    color={black}
+                    uiTransform={{ width: '100%', height: 22 }}
+                    textAlign="middle-center"
+                  />
+                  <Label
+                    value={`Your bricks: ${getMyContribution()}`}
+                    fontSize={15}
+                    color={black}
+                    uiTransform={{ width: '100%', height: 22 }}
+                    textAlign="middle-center"
+                  />
+                </UiEntity>
+              )}
+            </UiEntity>
+            </UiEntity>
           </UiEntity>
-        ),
-      })}
+        )
+      })()}
     </UiEntity>
   )
 }
@@ -1554,13 +1672,13 @@ function bottomActions() {
           statsOpen = true
         },
       })}
-      {roundedButton({
-        value: 'Leaderboard',
-        variant: 'secondary',
+      {imageButton({
+        key: 'leaderboard',
+        src: 'images/leaderboard.png',
         width: 150,
-        height: 32,
+        height: 90,
+        label: 'Leaderboard',
         margin: '0 4px',
-        fontSize: 13,
         onMouseDown: () => {
           openLeaderboard()
         },

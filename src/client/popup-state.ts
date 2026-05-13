@@ -7,6 +7,9 @@ export type Popup = {
   title: string
   // Additional body lines (each one its own Label so we can colour-code).
   body: string[]
+  // Optional hero image shown above the title (used by the Renaissance
+  // popup; building-advance popups leave it unset).
+  imageSrc?: string
 }
 
 let active: Popup | null = null
@@ -53,5 +56,6 @@ export function showPrestigeResult(
   active = {
     title: 'A Renaissance begins',
     body,
+    imageSrc: 'images/level_up.png',
   }
 }

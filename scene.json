@@ -2,8 +2,8 @@
   "ecs7": true,
   "runtimeVersion": "7",
   "display": {
-    "title": "Piazza Italiana",
-    "description": "A small Italian piazza with a fountain at the centre",
+    "title": "Marble & Mortar",
+    "description": "A cooperative Italian-landmark building game. Collect bricks, raise Pisa, the Colosseum, the Duomo, the Pantheon, Trevi, and the Doge's Palace — keep them upright before they topple.",
     "navmapThumbnail": "images/scene-thumbnail.png",
     "favicon": "favicon_asset"
   },
