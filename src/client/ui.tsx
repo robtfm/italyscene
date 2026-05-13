@@ -86,6 +86,16 @@ let hoveredTooltipExtraLeft = 0
 // to the right of the cursor since the modal is centered).
 let hoveredTooltipAnchorRight = false
 let hoveredCardIndex = 0
+
+// Closing a modal (backdrop click, Close button, etc.) yanks the hover
+// targets out from under the cursor before onMouseLeave fires, so the
+// tooltip stays stuck. Call this from every modal-close path.
+function clearHoverTooltip() {
+  hoveredTooltip = null
+  hoveredIcon = null
+  hoveredTooltipExtraLeft = 0
+  hoveredTooltipAnchorRight = false
+}
 const acknowledgedBuyables = new Set<string>()
 
 function buyableKey(name: string, level: number) {
@@ -571,6 +581,7 @@ function renaissanceModal() {
       onMouseDown={() => {
         // Click outside the panel cancels.
         renaissanceOpen = false
+        clearHoverTooltip()
       }}
     >
       <UiEntity
@@ -628,6 +639,7 @@ function renaissanceModal() {
                   onMouseDown: () => {
                     playGlobal('uiClick')
                     renaissanceOpen = false
+                    clearHoverTooltip()
                   },
                 })}
                 {roundedButton({
@@ -644,6 +656,7 @@ function renaissanceModal() {
                     })
                     renaissanceOpen = false
                     statsOpen = false
+                    clearHoverTooltip()
                   },
                 })}
               </UiEntity>
@@ -808,6 +821,7 @@ function leaderboardModal() {
       uiBackground={{ color: panelBlack }}
       onMouseDown={() => {
         leaderboardOpen = false
+        clearHoverTooltip()
       }}
     >
       <UiEntity
@@ -910,6 +924,7 @@ function leaderboardModal() {
                   onMouseDown: () => {
                     playGlobal('uiClick')
                     leaderboardOpen = false
+                    clearHoverTooltip()
                   },
                 })}
               </UiEntity>
@@ -1739,6 +1754,7 @@ function skillTreeModal() {
       uiBackground={{ color: panelBlack }}
       onMouseDown={() => {
         skillTreeOpen = false
+        clearHoverTooltip()
       }}
     >
       <UiEntity
@@ -1920,6 +1936,7 @@ function skillTreeModal() {
                 onMouseDown: () => {
                   playGlobal('uiClick')
                   skillTreeOpen = false
+                  clearHoverTooltip()
                 },
               })}
             </UiEntity>
@@ -1954,6 +1971,7 @@ function statsModal() {
       uiBackground={{ color: panelBlack }}
       onMouseDown={() => {
         statsOpen = false
+        clearHoverTooltip()
       }}
     >
       <UiEntity
@@ -2105,6 +2123,7 @@ function statsModal() {
                   onMouseDown: () => {
                     playGlobal('uiClick')
                     statsOpen = false
+                    clearHoverTooltip()
                   },
                 })}
               </UiEntity>
@@ -2354,6 +2373,11 @@ function skillRow(opts: {
           onMouseDown: () => {
             if (opts.canBuy && !opts.atMax) {
               playGlobal('skillUp')
+              // The skill row re-renders on purchase (level + cost change),
+              // which can detach the hover target without firing the row's
+              // onMouseLeave. Clear the tooltip explicitly so it doesn't
+              // linger after the buy.
+              clearHoverTooltip()
               opts.onBuy()
             }
           },
