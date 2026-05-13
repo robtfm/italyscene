@@ -10,6 +10,7 @@ import { WorldState } from '../shared/schemas'
 import { BUILDING_CONFIGS } from '../shared/buildings'
 import { room } from '../shared/messages'
 import { brickPositions } from './brick-state'
+import { playAt } from './audio'
 
 // Each brick takes FLIGHT_MS ms to reach the tower; bricks within a stack
 // are staggered by STAGGER_MS so a value=N pickup looks like N bricks
@@ -98,6 +99,8 @@ function flyingBrickSystem() {
     const a = active[i]
     const t = (now - a.startedAt) / FLIGHT_MS
     if (t >= 1) {
+      // Second click sound at the landing point.
+      playAt('brickPickup', { x: a.target.x, y: a.target.y, z: a.target.z })
       engine.removeEntity(a.entity)
       active.splice(i, 1)
       continue
@@ -115,6 +118,8 @@ function flyingBrickSystem() {
 }
 
 function spawnFlyingBrick(p: Pending, now: number) {
+  // One ruffling-card sound per brick as it lifts off.
+  playAt('brickPickup', { x: p.start.x, y: p.start.y, z: p.start.z })
   const entity = engine.addEntity()
   Transform.create(entity, {
     position: { x: p.start.x, y: p.start.y, z: p.start.z },

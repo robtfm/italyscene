@@ -50,6 +50,7 @@ import {
 } from '../shared/buildings'
 import { clearPopup, getPopup } from './popup-state'
 import { getLeaderboardSnapshot } from './leaderboard-state'
+import { playGlobal } from './audio'
 
 const piazzaRed = Color4.fromHexString('#c8233bff')
 const panelGreen = Color4.create(0.06, 0.34, 0.18, 0.92)
@@ -390,7 +391,10 @@ function imageButton(opts: {
       onMouseLeave={() => {
         if (hoveredImageButton === opts.key) hoveredImageButton = null
       }}
-      onMouseDown={opts.onMouseDown}
+      onMouseDown={() => {
+        playGlobal('uiClick')
+        opts.onMouseDown?.()
+      }}
     >
       <UiEntity
         uiTransform={{
@@ -609,6 +613,7 @@ function renaissanceModal() {
                   width: 120,
                   height: 30,
                   onMouseDown: () => {
+                    playGlobal('uiClick')
                     renaissanceOpen = false
                   },
                 })}
@@ -619,6 +624,7 @@ function renaissanceModal() {
                   height: 30,
                   onMouseDown: () => {
                     if (!canConfirm) return
+                    playGlobal('uiClick')
                     room.send('prestige', {
                       ts: Date.now(),
                       allocationJson: JSON.stringify(renaissanceDraft),
@@ -693,6 +699,7 @@ function perkAllocRow(opts: {
         margin: '0 4px',
         onMouseDown: () => {
           if (!canDec) return
+          playGlobal('uiClick')
           renaissanceDraft[opts.levelKey] = opts.current - 1
         },
       })}
@@ -712,6 +719,7 @@ function perkAllocRow(opts: {
         margin: '0 4px',
         onMouseDown: () => {
           if (!canInc) return
+          playGlobal('uiClick')
           renaissanceDraft[opts.levelKey] = opts.current + 1
         },
       })}
@@ -887,6 +895,7 @@ function leaderboardModal() {
                   width: 120,
                   height: 28,
                   onMouseDown: () => {
+                    playGlobal('uiClick')
                     leaderboardOpen = false
                   },
                 })}
@@ -1791,6 +1800,7 @@ function skillTreeModal() {
                 height: 28,
                 margin: '12px 0 0 0',
                 onMouseDown: () => {
+                  playGlobal('uiClick')
                   skillTreeOpen = false
                 },
               })}
@@ -1975,6 +1985,7 @@ function statsModal() {
                   width: 100,
                   height: 28,
                   onMouseDown: () => {
+                    playGlobal('uiClick')
                     statsOpen = false
                   },
                 })}
@@ -2223,7 +2234,10 @@ function skillRow(opts: {
           height: 28,
           fontSize: 11,
           onMouseDown: () => {
-            if (opts.canBuy && !opts.atMax) opts.onBuy()
+            if (opts.canBuy && !opts.atMax) {
+              playGlobal('skillUp')
+              opts.onBuy()
+            }
           },
         })}
       </UiEntity>

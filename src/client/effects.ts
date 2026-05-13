@@ -18,6 +18,7 @@ import {
   COMPLETION_CELEBRATION_S,
 } from '../shared/buildings'
 import { getActiveBuildingState } from './setup'
+import { playAt } from './audio'
 
 type Particle = {
   entity: Entity
@@ -278,7 +279,14 @@ function buildingEventEffectsSystem(_dt: number) {
     const prev = prevEdge.get(entity) ?? { collapsing: false, completing: false }
     if (cfg && !prev.collapsing && cur.collapsing) {
       const ps = cfg.programmaticSpawn
-      if (ps) spawnRubble(ps.position.x, ps.position.y, ps.position.z)
+      if (ps) {
+        spawnRubble(ps.position.x, ps.position.y, ps.position.z)
+        playAt('collapse', {
+          x: ps.position.x,
+          y: ps.position.y,
+          z: ps.position.z,
+        })
+      }
     }
     if (cfg && !prev.completing && cur.completing) {
       const ps = cfg.programmaticSpawn
@@ -289,6 +297,7 @@ function buildingEventEffectsSystem(_dt: number) {
         const cz = ps.position.z
         const o = randomInSphere(10)
         spawnFireworks(cx + o.x, cy + o.y, cz + o.z)
+        playAt('completion', { x: cx, y: cy, z: cz })
         nextCompletionBurst.set(entity, now + COMPLETION_BURST_INTERVAL_MS)
       }
     }

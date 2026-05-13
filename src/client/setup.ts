@@ -21,6 +21,7 @@ import { spawnPlaceholderBuildings } from '../shared/building-spawn'
 import { setupFlyingBricks } from './flying-bricks'
 import { brickPositions } from './brick-state'
 import { setupEffects } from './effects'
+import { setupAudio, playGlobal } from './audio'
 import { showBuildingAdvance, showPrestigeResult } from './popup-state'
 import { setLeaderboardSnapshot } from './leaderboard-state'
 import { pickupRadius } from '../shared/upgrades'
@@ -106,11 +107,14 @@ export function initClient() {
   spawnPlaceholderBuildings()
   setupFlyingBricks()
   setupEffects()
+  setupAudio()
   room.onMessage('buildingMaxAdvanced', (data) => {
     showBuildingAdvance(data.buildingKey, data.level)
+    playGlobal('buildingPopup')
   })
   room.onMessage('prestigeResult', (data) => {
     showPrestigeResult(data.prestigeLevel, data.advancesJson)
+    playGlobal('renaissance')
   })
   room.onMessage('leaderboardSnapshot', (data) => {
     try {
