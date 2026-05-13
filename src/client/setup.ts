@@ -228,7 +228,10 @@ function queueBrickRaycast(entity: Entity, brick: BrickValue) {
       if (!Brick.getOrNull(entity)) return finish()
       const surfaceY = result.hits?.[0]?.position?.y
       if (surfaceY === undefined) return finish()
-      const y = surfaceY + BRICK_HOVER_HEIGHT
+      // Clamp the surface at the world's nominal ground plane (y=0) so a
+      // brick never drops below it when the raycast hits something below
+      // (e.g. a hill cavity or an off-grid mesh).
+      const y = Math.max(0, surfaceY) + BRICK_HOVER_HEIGHT
       const t = Transform.getMutableOrNull(entity)
       if (t) {
         t.position.y = y

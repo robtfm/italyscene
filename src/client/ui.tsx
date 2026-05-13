@@ -1327,7 +1327,10 @@ function topCenter() {
                     textAlign="middle-center"
                   />
                   <Label
-                    value={`Your bricks: ${getMyContribution()}`}
+                    value={`Your bricks: ${Math.max(
+                      0,
+                      getMyContribution() - getMyStats().bricksSpent
+                    )}`}
                     fontSize={15}
                     color={black}
                     uiTransform={{ width: '100%', height: 22 }}
