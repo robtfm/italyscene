@@ -1404,14 +1404,21 @@ function rightEdge() {
     <UiEntity
       uiTransform={{
         positionType: 'absolute',
-        position: { top: CARD_TOP, right: CARD_RIGHT_MARGIN },
-        width: CARD_WIDTH,
+        position: { top: 0, right: CARD_RIGHT_MARGIN },
+        height: '100%',
         flexDirection: 'column',
-        padding: 8,
-        borderRadius: PANEL_OUTER_RADIUS,
+        justifyContent: 'center',
       }}
-      uiBackground={{ color: Color4.create(0, 0, 0, 0.35) }}
     >
+      <UiEntity
+        uiTransform={{
+          width: CARD_WIDTH,
+          flexDirection: 'column',
+          padding: 8,
+          borderRadius: PANEL_OUTER_RADIUS,
+        }}
+        uiBackground={{ color: Color4.create(0, 0, 0, 0.35) }}
+      >
       {sectionHeader('Global')}
       {powerupCard({
         ...UPGRADE_INFO.multiBricks,
@@ -1488,6 +1495,7 @@ function rightEdge() {
         yourLevel: stats.titheLevel,
         isGlobal: false,
       })}
+      </UiEntity>
     </UiEntity>
   )
 }
