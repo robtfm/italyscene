@@ -96,6 +96,7 @@ function clearHoverTooltip() {
   hoveredTooltipExtraLeft = 0
   hoveredTooltipAnchorRight = false
 }
+
 const acknowledgedBuyables = new Set<string>()
 
 function buyableKey(name: string, level: number) {
@@ -577,18 +578,26 @@ function renaissanceModal() {
         justifyContent: 'center',
         zIndex: 150,
       }}
-      uiBackground={{ color: panelBlack }}
-      onMouseDown={() => {
-        // Click outside the panel cancels.
-        renaissanceOpen = false
-        clearHoverTooltip()
-      }}
     >
+      {/* Backdrop as a SIBLING of the panel, not a parent: Unity bubbles
+          child clicks to ancestors, so pointerFilter on the panel alone
+          doesn't stop close-on-backdrop. */}
       <UiEntity
-        uiTransform={{ width: 520 }}
-        onMouseDown={() => {
-          /* swallow click */
+        uiTransform={{
+          positionType: 'absolute',
+          position: { top: 0, left: 0 },
+          width: '100%',
+          height: '100%',
         }}
+        uiBackground={{ color: panelBlack }}
+        onMouseDown={() => {
+          renaissanceOpen = false
+          clearHoverTooltip()
+        }}
+      />
+      <UiEntity
+        uiTransform={{ width: 520, pointerFilter: 'block' }}
+        onMouseDown={() => {}}
       >
         {framedPanel({
           width: '100%',
@@ -818,17 +827,23 @@ function leaderboardModal() {
         justifyContent: 'center',
         zIndex: 120,
       }}
-      uiBackground={{ color: panelBlack }}
-      onMouseDown={() => {
-        leaderboardOpen = false
-        clearHoverTooltip()
-      }}
     >
       <UiEntity
-        uiTransform={{ width: 560 }}
-        onMouseDown={() => {
-          /* swallow click */
+        uiTransform={{
+          positionType: 'absolute',
+          position: { top: 0, left: 0 },
+          width: '100%',
+          height: '100%',
         }}
+        uiBackground={{ color: panelBlack }}
+        onMouseDown={() => {
+          leaderboardOpen = false
+          clearHoverTooltip()
+        }}
+      />
+      <UiEntity
+        uiTransform={{ width: 560, pointerFilter: 'block' }}
+        onMouseDown={() => {}}
       >
         {framedPanel({
           width: '100%',
@@ -1157,16 +1172,27 @@ function topCenter() {
             : black
         return (
           <UiEntity
+            // Outer wrapper carries the book background at full size with NO
+            // padding. Unity and Bevy disagree on whether padding shrinks the
+            // background area, so we keep padding on the inner wrapper only.
             uiTransform={{
               width: 460,
               height: 200,
-              padding: 18,
+              padding: 0,
               flexDirection: 'column',
-              alignItems: 'center',
             }}
             uiBackground={{
               texture: { src: 'images/blank_book.png' },
               textureMode: 'stretch',
+            }}
+          >
+          <UiEntity
+            uiTransform={{
+              width: '100%',
+              height: '100%',
+              padding: 18,
+              flexDirection: 'column',
+              alignItems: 'center',
             }}
           >
             {/* Title bar: "Marble" left page, "&" on the spine, "Mortar" right */}
@@ -1289,6 +1315,7 @@ function topCenter() {
                   />
                 </UiEntity>
               )}
+            </UiEntity>
             </UiEntity>
             </UiEntity>
           </UiEntity>
@@ -1650,7 +1677,10 @@ function tooltipBox(text: string) {
           value={text}
           fontSize={16}
           color={Color4.White()}
-          uiTransform={{ width: '100%' }}
+          // Unity treats an unset height as 0 here, so the backdrop only
+          // covers the icon. Bevy grows the parent to fit the text. Setting
+          // height: 'auto' explicitly gives both renderers the same answer.
+          uiTransform={{ width: '100%', height: 'auto' }}
         />
       </UiEntity>
     ),
@@ -1759,17 +1789,23 @@ function skillTreeModal() {
         justifyContent: 'center',
         zIndex: 100,
       }}
-      uiBackground={{ color: panelBlack }}
-      onMouseDown={() => {
-        skillTreeOpen = false
-        clearHoverTooltip()
-      }}
     >
       <UiEntity
-        uiTransform={{ width: 460 }}
-        onMouseDown={() => {
-          /* swallow click so it doesn't close the modal */
+        uiTransform={{
+          positionType: 'absolute',
+          position: { top: 0, left: 0 },
+          width: '100%',
+          height: '100%',
         }}
+        uiBackground={{ color: panelBlack }}
+        onMouseDown={() => {
+          skillTreeOpen = false
+          clearHoverTooltip()
+        }}
+      />
+      <UiEntity
+        uiTransform={{ width: 460, pointerFilter: 'block' }}
+        onMouseDown={() => {}}
       >
         {framedPanel({
           width: '100%',
@@ -1976,17 +2012,23 @@ function statsModal() {
         justifyContent: 'center',
         zIndex: 100,
       }}
-      uiBackground={{ color: panelBlack }}
-      onMouseDown={() => {
-        statsOpen = false
-        clearHoverTooltip()
-      }}
     >
       <UiEntity
-        uiTransform={{ width: 460 }}
-        onMouseDown={() => {
-          /* swallow click */
+        uiTransform={{
+          positionType: 'absolute',
+          position: { top: 0, left: 0 },
+          width: '100%',
+          height: '100%',
         }}
+        uiBackground={{ color: panelBlack }}
+        onMouseDown={() => {
+          statsOpen = false
+          clearHoverTooltip()
+        }}
+      />
+      <UiEntity
+        uiTransform={{ width: 460, pointerFilter: 'block' }}
+        onMouseDown={() => {}}
       >
         {framedPanel({
           width: '100%',
