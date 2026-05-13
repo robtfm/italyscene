@@ -1409,15 +1409,20 @@ function incrementBrickCount(amount: number, straightenMultiplier = 1) {
   const ws = WorldState.getMutable(worldStateEntity)
   ws.brickCount += amount
 
-  for (const [entity] of engine.getEntitiesWith(BuildingState)) {
+  // Only straighten the currently-active building. Previously this looped
+  // over every BuildingState entity, which included completed ones in the
+  // 1-hour persist window — they'd visibly straighten as the next building
+  // collected bricks.
+  for (const [entity, state] of engine.getEntitiesWith(BuildingState)) {
+    if (state.buildingKey !== ws.currentBuildingKey) continue
     const cfg = configForStateEntity(entity)
     if (!cfg) continue
-    const state = BuildingState.getMutable(entity)
-    if (state.collapsing) continue
-    if (ws.brickCount >= bricksRequiredFor(cfg, state.level)) continue
+    const mut = BuildingState.getMutable(entity)
+    if (mut.collapsing) continue
+    if (ws.brickCount >= bricksRequiredFor(cfg, mut.level)) continue
     const totalStraighten =
-      brickStraightenFor(cfg, state.level) * straightenMultiplier
-    state.currentLean = Math.max(0, state.currentLean - totalStraighten)
+      brickStraightenFor(cfg, mut.level) * straightenMultiplier
+    mut.currentLean = Math.max(0, mut.currentLean - totalStraighten)
   }
 }
 

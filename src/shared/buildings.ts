@@ -73,7 +73,7 @@ export const PISA: BuildingConfig = {
   collapseSinkDuration: 1.5,
   collapseSinkDistance: 10,
   riseStartLeanProgress: 0.1,
-  naturalLeanDeg: 4,
+  naturalLeanDeg: 8,
   programmaticSpawn: {
     position: { x: 40, y: 3, z: 40 },
     glbSrc: 'assets/Models/buildings/pisa.glb',
