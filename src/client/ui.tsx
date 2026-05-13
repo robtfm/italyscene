@@ -873,45 +873,42 @@ function leaderboardModal() {
                 {leaderboardTabButton('Bricks', 'bricks')}
                 {leaderboardTabButton('Skill', 'skill')}
               </UiEntity>
-              {/* Sub-picker (only for building / skill) */}
-              {leaderboardKind === 'building' ? (
-                <UiEntity
-                  uiTransform={{
-                    width: '100%',
-                    flexDirection: 'row',
-                    flexWrap: 'wrap',
-                    margin: '6px 0 0 0',
-                  }}
-                >
-                  {BUILDING_CONFIGS.map((cfg) =>
-                    leaderboardSubButton(
-                      cfg.displayName,
-                      cfg.entityName === leaderboardSubBuilding,
-                      () => selectLeaderboardSubBuilding(cfg.entityName)
+              {/* Sub-picker (only populated for building / skill; the
+                  wrapper has a fixed height in every case so the modal
+                  doesn't resize when switching tabs.) */}
+              <UiEntity
+                uiTransform={{
+                  width: '100%',
+                  height: 120,
+                  flexDirection: 'row',
+                  flexWrap: 'wrap',
+                  justifyContent: 'center',
+                  alignContent: 'flex-start',
+                  margin: '6px 0 0 0',
+                }}
+              >
+                {leaderboardKind === 'building'
+                  ? BUILDING_CONFIGS.map((cfg) =>
+                      leaderboardSubButton(
+                        cfg.displayName,
+                        cfg.entityName === leaderboardSubBuilding,
+                        () => selectLeaderboardSubBuilding(cfg.entityName)
+                      )
                     )
-                  )}
-                </UiEntity>
-              ) : null}
-              {leaderboardKind === 'skill' ? (
-                <UiEntity
-                  uiTransform={{
-                    width: '100%',
-                    flexDirection: 'row',
-                    flexWrap: 'wrap',
-                    margin: '6px 0 0 0',
-                  }}
-                >
-                  {LB_SKILL_KEYS.map((key) => {
-                    const infoKey = LB_SKILL_INFO_KEY[key]
-                    const title = infoKey ? UPGRADE_INFO[infoKey].title : key
-                    return leaderboardSubButton(
-                      title,
-                      key === leaderboardSubSkill,
-                      () => selectLeaderboardSubSkill(key)
-                    )
-                  })}
-                </UiEntity>
-              ) : null}
+                  : leaderboardKind === 'skill'
+                  ? LB_SKILL_KEYS.map((key) => {
+                      const infoKey = LB_SKILL_INFO_KEY[key]
+                      const title = infoKey
+                        ? UPGRADE_INFO[infoKey].title
+                        : key
+                      return leaderboardSubButton(
+                        title,
+                        key === leaderboardSubSkill,
+                        () => selectLeaderboardSubSkill(key)
+                      )
+                    })
+                  : null}
+              </UiEntity>
               {/* Title */}
               <Label
                 value={leaderboardTitle()}
@@ -979,19 +976,33 @@ function leaderboardSubButton(
   })
 }
 
+// Fixed body height — accommodates 10 top-row entries + the optional
+// inline "you" row + separator without resizing the panel as the snapshot
+// loads in.
+const LB_BODY_HEIGHT = 460
+
 function leaderboardBody(
   snap: ReturnType<typeof getLeaderboardSnapshot>,
   myAddress: string
 ) {
   if (!snap) {
     return (
-      <Label
-        value="Loading…"
-        fontSize={12}
-        color={Color4.create(0, 0, 0, 0.7)}
-        uiTransform={{ width: '100%', height: 40, margin: '8px 0' }}
-        textAlign="middle-center"
-      />
+      <UiEntity
+        uiTransform={{
+          width: '100%',
+          height: LB_BODY_HEIGHT,
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <Label
+          value="Loading…"
+          fontSize={12}
+          color={Color4.create(0, 0, 0, 0.7)}
+          uiTransform={{ width: '100%', height: 40 }}
+          textAlign="middle-center"
+        />
+      </UiEntity>
     )
   }
   const rows: any[] = []
@@ -1033,7 +1044,11 @@ function leaderboardBody(
   }
   return (
     <UiEntity
-      uiTransform={{ width: '100%', flexDirection: 'column' }}
+      uiTransform={{
+        width: '100%',
+        height: LB_BODY_HEIGHT,
+        flexDirection: 'column',
+      }}
     >
       {rows}
     </UiEntity>
