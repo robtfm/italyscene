@@ -107,15 +107,15 @@ function buyableKey(name: string, level: number) {
 
 const ALL_UPGRADES: { key: string; getter: (s: ReturnType<typeof getMyStats>) => number }[] = [
   { key: 'multiBricksLevel', getter: (s) => s.multiBricksLevel },
-  { key: 'pickupRadiusLevel', getter: (s) => s.pickupRadiusLevel },
   { key: 'fasterSpawnsLevel', getter: (s) => s.fasterSpawnsLevel },
   { key: 'leanDampenerLevel', getter: (s) => s.leanDampenerLevel },
   { key: 'sturdyFoundationLevel', getter: (s) => s.sturdyFoundationLevel },
-  { key: 'plumbLineLevel', getter: (s) => s.plumbLineLevel },
   { key: 'plumbTeacherLevel', getter: (s) => s.plumbTeacherLevel },
-  { key: 'generousLevel', getter: (s) => s.generousLevel },
   { key: 'generousTeacherLevel', getter: (s) => s.generousTeacherLevel },
   { key: 'stockpileLevel', getter: (s) => s.stockpileLevel },
+  { key: 'pickupRadiusLevel', getter: (s) => s.pickupRadiusLevel },
+  { key: 'plumbLineLevel', getter: (s) => s.plumbLineLevel },
+  { key: 'generousLevel', getter: (s) => s.generousLevel },
   { key: 'titheLevel', getter: (s) => s.titheLevel },
 ]
 
@@ -549,15 +549,15 @@ function popupToast() {
 // (used for display titles in the Renaissance perk allocation modal).
 const PERK_ROWS: Array<{ levelKey: string; infoKey: string }> = [
   { levelKey: 'multiBricksLevel', infoKey: 'multiBricks' },
-  { levelKey: 'pickupRadiusLevel', infoKey: 'pickupRadius' },
   { levelKey: 'fasterSpawnsLevel', infoKey: 'fasterSpawns' },
   { levelKey: 'leanDampenerLevel', infoKey: 'leanDampener' },
   { levelKey: 'sturdyFoundationLevel', infoKey: 'sturdyFoundation' },
-  { levelKey: 'plumbLineLevel', infoKey: 'plumbLine' },
   { levelKey: 'plumbTeacherLevel', infoKey: 'plumbTeacher' },
-  { levelKey: 'generousLevel', infoKey: 'generous' },
   { levelKey: 'generousTeacherLevel', infoKey: 'generousTeacher' },
   { levelKey: 'stockpileLevel', infoKey: 'stockpile' },
+  { levelKey: 'pickupRadiusLevel', infoKey: 'pickupRadius' },
+  { levelKey: 'plumbLineLevel', infoKey: 'plumbLine' },
+  { levelKey: 'generousLevel', infoKey: 'generous' },
   { levelKey: 'titheLevel', infoKey: 'tithe' },
 ]
 
@@ -772,15 +772,15 @@ function perkAllocRow(opts: {
 // leaderboard tabs appear.
 const LB_SKILL_KEYS: string[] = [
   'multiBricksLevel',
-  'pickupRadiusLevel',
   'fasterSpawnsLevel',
   'leanDampenerLevel',
   'sturdyFoundationLevel',
-  'plumbLineLevel',
   'plumbTeacherLevel',
-  'generousLevel',
   'generousTeacherLevel',
   'stockpileLevel',
+  'pickupRadiusLevel',
+  'plumbLineLevel',
+  'generousLevel',
   'titheLevel',
 ]
 const LB_SKILL_INFO_KEY: Record<string, string> = {
@@ -1928,19 +1928,6 @@ function skillTreeModal() {
                   room.send('levelUpMultiBricks', { ts: Date.now() }),
               })}
               {skillRow({
-                ...UPGRADE_INFO.pickupRadius,
-                level: stats.pickupRadiusLevel,
-                nowLevel: stats.pickupRadiusLevel,
-                nextLevel: stats.pickupRadiusLevel + 1,
-                sub: `Personal. Reach ${pickupRadius(stats.pickupRadiusLevel).toFixed(1)} m.`,
-                cost: nextCost(stats.pickupRadiusLevel, stats.perkPoints, 'pickupRadiusLevel'),
-                atMax: isAtEffectiveMax('pickupRadiusLevel', stats.pickupRadiusLevel, stats.maxBuildingLevel),
-                canBuy: can('pickupRadiusLevel', stats.pickupRadiusLevel),
-                lockReason: lockReasonFor('pickupRadiusLevel', stats.pickupRadiusLevel),
-                onBuy: () =>
-                  room.send('levelUpPickupRadius', { ts: Date.now() }),
-              })}
-              {skillRow({
                 ...UPGRADE_INFO.fasterSpawns,
                 level: stats.fasterSpawnsLevel,
                 nowLevel: fsEff,
@@ -1980,18 +1967,6 @@ function skillTreeModal() {
                   room.send('levelUpSturdyFoundation', { ts: Date.now() }),
               })}
               {skillRow({
-                ...UPGRADE_INFO.plumbLine,
-                level: stats.plumbLineLevel,
-                nowLevel: stats.plumbLineLevel,
-                nextLevel: stats.plumbLineLevel + 1,
-                sub: `Personal. Your bricks straighten +${(plumbLinePersonalBonus(stats.plumbLineLevel) * 100).toFixed(0)}%.`,
-                cost: nextCost(stats.plumbLineLevel, stats.perkPoints, 'plumbLineLevel'),
-                atMax: isAtEffectiveMax('plumbLineLevel', stats.plumbLineLevel, stats.maxBuildingLevel),
-                canBuy: can('plumbLineLevel', stats.plumbLineLevel),
-                lockReason: lockReasonFor('plumbLineLevel', stats.plumbLineLevel),
-                onBuy: () => room.send('levelUpPlumbLine', { ts: Date.now() }),
-              })}
-              {skillRow({
                 ...UPGRADE_INFO.plumbTeacher,
                 level: stats.plumbTeacherLevel,
                 nowLevel: getEffectivePlumbTeacherLevel(),
@@ -2003,18 +1978,6 @@ function skillTreeModal() {
                 lockReason: lockReasonFor('plumbTeacherLevel', stats.plumbTeacherLevel),
                 onBuy: () =>
                   room.send('levelUpPlumbTeacher', { ts: Date.now() }),
-              })}
-              {skillRow({
-                ...UPGRADE_INFO.generous,
-                level: stats.generousLevel,
-                nowLevel: stats.generousLevel,
-                nextLevel: stats.generousLevel + 1,
-                sub: `Personal. Your bricks worth +${(contributionPersonalBonus(stats.generousLevel) * 100).toFixed(0)}%.`,
-                cost: nextCost(stats.generousLevel, stats.perkPoints, 'generousLevel'),
-                atMax: isAtEffectiveMax('generousLevel', stats.generousLevel, stats.maxBuildingLevel),
-                canBuy: can('generousLevel', stats.generousLevel),
-                lockReason: lockReasonFor('generousLevel', stats.generousLevel),
-                onBuy: () => room.send('levelUpGenerous', { ts: Date.now() }),
               })}
               {skillRow({
                 ...UPGRADE_INFO.generousTeacher,
@@ -2040,6 +2003,43 @@ function skillTreeModal() {
                 canBuy: can('stockpileLevel', stats.stockpileLevel),
                 lockReason: lockReasonFor('stockpileLevel', stats.stockpileLevel),
                 onBuy: () => room.send('levelUpStockpile', { ts: Date.now() }),
+              })}
+              {skillRow({
+                ...UPGRADE_INFO.pickupRadius,
+                level: stats.pickupRadiusLevel,
+                nowLevel: stats.pickupRadiusLevel,
+                nextLevel: stats.pickupRadiusLevel + 1,
+                sub: `Personal. Reach ${pickupRadius(stats.pickupRadiusLevel).toFixed(1)} m.`,
+                cost: nextCost(stats.pickupRadiusLevel, stats.perkPoints, 'pickupRadiusLevel'),
+                atMax: isAtEffectiveMax('pickupRadiusLevel', stats.pickupRadiusLevel, stats.maxBuildingLevel),
+                canBuy: can('pickupRadiusLevel', stats.pickupRadiusLevel),
+                lockReason: lockReasonFor('pickupRadiusLevel', stats.pickupRadiusLevel),
+                onBuy: () =>
+                  room.send('levelUpPickupRadius', { ts: Date.now() }),
+              })}
+              {skillRow({
+                ...UPGRADE_INFO.plumbLine,
+                level: stats.plumbLineLevel,
+                nowLevel: stats.plumbLineLevel,
+                nextLevel: stats.plumbLineLevel + 1,
+                sub: `Personal. Your bricks straighten +${(plumbLinePersonalBonus(stats.plumbLineLevel) * 100).toFixed(0)}%.`,
+                cost: nextCost(stats.plumbLineLevel, stats.perkPoints, 'plumbLineLevel'),
+                atMax: isAtEffectiveMax('plumbLineLevel', stats.plumbLineLevel, stats.maxBuildingLevel),
+                canBuy: can('plumbLineLevel', stats.plumbLineLevel),
+                lockReason: lockReasonFor('plumbLineLevel', stats.plumbLineLevel),
+                onBuy: () => room.send('levelUpPlumbLine', { ts: Date.now() }),
+              })}
+              {skillRow({
+                ...UPGRADE_INFO.generous,
+                level: stats.generousLevel,
+                nowLevel: stats.generousLevel,
+                nextLevel: stats.generousLevel + 1,
+                sub: `Personal. Your bricks worth +${(contributionPersonalBonus(stats.generousLevel) * 100).toFixed(0)}%.`,
+                cost: nextCost(stats.generousLevel, stats.perkPoints, 'generousLevel'),
+                atMax: isAtEffectiveMax('generousLevel', stats.generousLevel, stats.maxBuildingLevel),
+                canBuy: can('generousLevel', stats.generousLevel),
+                lockReason: lockReasonFor('generousLevel', stats.generousLevel),
+                onBuy: () => room.send('levelUpGenerous', { ts: Date.now() }),
               })}
               {skillRow({
                 ...UPGRADE_INFO.tithe,
