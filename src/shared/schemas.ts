@@ -2,7 +2,7 @@ import { engine, Schemas } from '@dcl/sdk/ecs'
 import { AUTH_SERVER_PEER_ID } from '@dcl/sdk/network/message-bus-sync'
 
 export const WorldState = engine.defineComponent('italyscene:WorldState', {
-  brickCount: Schemas.Int,
+  brickCount: Schemas.Float,
   currentBuildingKey: Schemas.String,
   effectiveMultiBricksLevel: Schemas.Float,
   effectiveFasterSpawnsLevel: Schemas.Float,

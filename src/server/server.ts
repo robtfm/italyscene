@@ -908,7 +908,9 @@ async function applyBrickAward(playerAddress: string, baseValue: number) {
   const valueMult = 1 + personalContrib + teacherContrib
   // Generous boosts ONLY the building progress (brickCount), not the player's
   // lifetime currency. Otherwise it snowballs into self-funding upgrades.
-  const buildingValue = Math.max(baseValue, Math.round(baseValue * valueMult))
+  // Kept fractional internally so a +50% bonus on a base-1 brick is worth
+  // 1.5, not 2. Display sites round at the boundary.
+  const buildingValue = baseValue * valueMult
 
   const personalStraightenFrac = plumbLinePersonalBonus(profile.plumbLineLevel)
   const teacherStraightenFrac = ws
@@ -929,10 +931,7 @@ async function applyBrickAward(playerAddress: string, baseValue: number) {
     2,
     profile.prestigedMaxBuildingLevel[activeKey] ?? 0
   )
-  const creditValue = Math.max(
-    baseValue,
-    Math.round(baseValue * (1 + tithe) * prestigeMult)
-  )
+  const creditValue = baseValue * (1 + tithe) * prestigeMult
 
   incrementBrickCount(buildingValue, straightenMultiplier)
   // Single profile save per collection (was two: one for the all-time

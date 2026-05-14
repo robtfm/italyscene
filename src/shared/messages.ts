@@ -14,11 +14,11 @@ export const Messages = {
     value: Schemas.Int,
   }),
   debugAddBrick: Schemas.Map({ ts: Schemas.Int }),
-  contributionUpdate: Schemas.Map({ count: Schemas.Int }),
+  contributionUpdate: Schemas.Map({ count: Schemas.Float }),
   myStatsUpdate: Schemas.Map({
     prestigeLevel: Schemas.Int,
-    lifetimeContributions: Schemas.Int,
-    bricksSpent: Schemas.Int,
+    lifetimeContributions: Schemas.Float,
+    bricksSpent: Schemas.Float,
     // Player's pool-unlock pointer: pool index = 0..availableBuildings is
     // the set of (building, level) pairs the player can have spawned.
     availableBuildings: Schemas.Int,
@@ -104,7 +104,7 @@ export const Messages = {
     category: Schemas.String,
     entriesJson: Schemas.String,
     myRank: Schemas.Int,
-    myScore: Schemas.Int,
+    myScore: Schemas.Float,
     myName: Schemas.String,
     myAvatarUrl: Schemas.String,
   }),
