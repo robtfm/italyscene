@@ -302,11 +302,54 @@ const JITTER_RADIUS_XZ = 0.1
 const JITTER_RADIUS_Y = 0.3
 const JITTER_DURATION_MS = 200
 
+// One-time hill-Y stretch. Composite hills are mostly half-buried spheres,
+// so scaling Y up makes the visible domes taller without changing footprint
+// or horizontal placement. Decorations and building bases were placed on
+// the original surface curve, so a flat *= 1.5 doesn't follow the new
+// surface — instead we raycast down at their (x,z) to snap them onto the
+// re-shaped ground. Done once per entity right after hills scale up.
+const HILL_Y_SCALE = 1.5
+const GROUND_SNAP_FROM_Y = 100
+const GROUND_SNAP_MAX_DISTANCE = 200
+
+function snapDecorationToGround(entity: Entity) {
+  const t = Transform.getMutableOrNull(entity)
+  if (!t) return
+  const x = t.position.x
+  const z = t.position.z
+  const helper = engine.addEntity()
+  Transform.create(helper, {
+    position: { x, y: GROUND_SNAP_FROM_Y, z },
+  })
+  raycastSystem.registerGlobalDirectionRaycast(
+    {
+      entity: helper,
+      opts: {
+        direction: { x: 0, y: -1, z: 0 },
+        maxDistance: GROUND_SNAP_MAX_DISTANCE,
+        collisionMask: ColliderLayer.CL_PHYSICS,
+        continuous: false,
+      },
+    },
+    (result) => {
+      const cleanup = () => engine.removeEntity(helper)
+      const surfaceY = result.hits?.[0]?.position?.y
+      if (surfaceY === undefined) return cleanup()
+      const t2 = Transform.getMutableOrNull(entity)
+      if (t2) t2.position.y = Math.max(0, surfaceY)
+      cleanup()
+    }
+  )
+}
+
 function buildHillCache() {
+  // Pass 1: stretch hills. Must happen before any raycasts so the raycast
+  // sees the new, scaled surface.
   for (const [entity] of engine.getEntitiesWith(Transform, Name)) {
     const nm = Name.getOrNull(entity)?.value ?? ''
     if (!nm.startsWith('Hill_') && !nm.startsWith('BigHill_')) continue
-    const t = Transform.get(entity)
+    const t = Transform.getMutable(entity)
+    t.scale.y *= HILL_Y_SCALE
     const origin: Vec3 = { x: t.position.x, y: t.position.y, z: t.position.z }
     hillJitter.set(entity, {
       origin,
@@ -316,6 +359,17 @@ function buildHillCache() {
       atRest: true,
     })
   }
+  // Pass 2: snap bushes and flowers onto the new surface. Building bases
+  // are skipped here because their child visibles have CL_PHYSICS GLB
+  // colliders that would obstruct a top-down raycast at the base's xz.
+  for (const [entity] of engine.getEntitiesWith(Transform, Name)) {
+    const nm = Name.getOrNull(entity)?.value ?? ''
+    if (nm.startsWith('Bush_') || nm.startsWith('Flower')) {
+      snapDecorationToGround(entity)
+    }
+  }
+  // Building base spawn ys are already pre-lifted in buildings.ts to land
+  // on the scaled-up hills, so no runtime adjustment is needed for them.
   // Only mark as built once we've actually found hills — composite may not
   // be loaded on the first tick.
   if (hillJitter.size > 0) hillCacheBuilt = true

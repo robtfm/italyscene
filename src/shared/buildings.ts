@@ -75,7 +75,7 @@ export const PISA: BuildingConfig = {
   riseStartLeanProgress: 0.1,
   naturalLeanDeg: 8,
   programmaticSpawn: {
-    position: { x: 40, y: 3, z: 40 },
+    position: { x: 40, y: 5.75, z: 40 }, // base 3 + ~2.64 hill lift, rounded
     glbSrc: 'assets/Models/buildings/pisa.glb',
     glbScale: 27, // 1.5× of prior 18
     burialDepth: 6,
@@ -107,7 +107,7 @@ export const COLOSSEUM: BuildingConfig = {
   riseStartLeanProgress: 0.1,
   naturalLeanDeg: 0,
   programmaticSpawn: {
-    position: { x: 40, y: 3, z: 15 },
+    position: { x: 40, y: 6.0, z: 15 }, // base 3 + ~3.04 hill lift, rounded
     yawDeg: 0,
     glbSrc: 'assets/Models/buildings/colosseum.glb',
     glbScale: 6, // native ~4m wide (internal 100× scale); target ~24m
@@ -139,7 +139,7 @@ export const DUOMO: BuildingConfig = {
   riseStartLeanProgress: 0.1,
   naturalLeanDeg: 1,
   programmaticSpawn: {
-    position: { x: 62, y: 3.5, z: 43 },
+    position: { x: 62, y: 6.25, z: 43 }, // base 3.5 + ~2.74 hill lift, rounded
     yawDeg: 0, // 9 o'clock rotation baked into the GLB root node
     glbSrc: 'assets/Models/buildings/duomo.glb',
     glbScale: 0.004, // 80% of prior 0.005; ~15m tall
@@ -171,7 +171,7 @@ export const PANTHEON: BuildingConfig = {
   riseStartLeanProgress: 0.1,
   naturalLeanDeg: 0,
   programmaticSpawn: {
-    position: { x: 17, y: 3, z: 52 },
+    position: { x: 17, y: 6.25, z: 52 }, // base 3 + ~3.31 hill lift, rounded
     yawDeg: 120, // faces 4 o'clock
     glbSrc: 'assets/Models/buildings/pantheon.glb',
     glbScale: 0.0048, // dome-node scale (1500/500) baked in; native span ~1650; target ~8m
@@ -203,7 +203,7 @@ export const TREVI: BuildingConfig = {
   riseStartLeanProgress: 0.1,
   naturalLeanDeg: 2,
   programmaticSpawn: {
-    position: { x: 50, y: 3.5, z: 60 },
+    position: { x: 50, y: 7.0, z: 60 }, // base 3.5 + ~3.51 hill lift, rounded
     glbSrc: 'assets/Models/buildings/trevi.glb',
     glbScale: 10, // native ~2m; target ~20m
 
@@ -233,7 +233,7 @@ export const DOGES_PALACE: BuildingConfig = {
   riseStartLeanProgress: 0.1,
   naturalLeanDeg: 0,
   programmaticSpawn: {
-    position: { x: 15, y: 3, z: 25 },
+    position: { x: 15, y: 5.25, z: 25 }, // base 3 + ~2.22 hill lift, rounded
     yawDeg: 60, // faces 2 o'clock
     glbSrc: 'assets/Models/buildings/doges.glb',
     glbScale: 1.5,
