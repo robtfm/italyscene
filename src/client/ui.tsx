@@ -47,6 +47,7 @@ import {
 import {
   BUILDING_CONFIGS,
   COMPLETION_CELEBRATION_S,
+  brickStraightenFor,
 } from '../shared/buildings'
 import { clearPopup, getPopup } from './popup-state'
 import { getLeaderboardSnapshot } from './leaderboard-state'
@@ -1190,6 +1191,37 @@ function topCenter() {
           active?.collapsing || (active && active.completedTime > 0)
             ? piazzaRed
             : black
+        const activeCfg = active
+          ? BUILDING_CONFIGS.find((c) => c.displayName === active.displayName) ??
+            null
+          : null
+        const statsTooltip = (() => {
+          if (!activeCfg || !active) return null
+          const heightSpan = 0.55 - activeCfg.riseStartLeanProgress
+          const heightScale = Math.max(
+            0,
+            (active.riseProgress - activeCfg.riseStartLeanProgress) / heightSpan
+          )
+          const dampenScale = leanRateScale(getEffectiveLeanDampenerLevel())
+          const currentLeanPerSec =
+            activeCfg.leanRatePerSec * heightScale * dampenScale
+          const stats = getMyStats()
+          const tithe = titheBonus(stats.titheLevel)
+          const prestigeMult = Math.pow(
+            2,
+            stats.prestigedMaxBuildingLevel[activeCfg.entityName] ?? 0
+          )
+          const earnMult = (1 + tithe) * prestigeMult
+          return [
+            `Lean rate: ${currentLeanPerSec.toFixed(2)}°/s (grows with height)`,
+            `Per-brick straighten: ${brickStraightenFor(
+              activeCfg,
+              active.level
+            ).toFixed(2)}° (before bonuses)`,
+            `Collapse threshold: ${activeCfg.collapseAngleDeg}°`,
+            `You earn ×${earnMult.toFixed(2)} per brick (tithe + prestige)`,
+          ].join('\n')
+        })()
         return (
           <UiEntity
             // Outer wrapper carries the book background at full size with NO
@@ -1204,6 +1236,22 @@ function topCenter() {
             uiBackground={{
               texture: { src: 'images/blank_book.png' },
               textureMode: 'stretch',
+            }}
+            onMouseEnter={() => {
+              if (!statsTooltip) return
+              hoveredTooltip = statsTooltip
+              hoveredIcon = null
+              // Top panel sits centered up high; cursor is also high so the
+              // tooltip's "above the cursor" preference clamps it to top:8
+              // anyway. Anchor right keeps it from drifting off-screen on the
+              // left edge when the cursor is near the panel's left side.
+              hoveredTooltipAnchorRight = true
+            }}
+            onMouseLeave={() => {
+              if (hoveredTooltip === statsTooltip) {
+                hoveredTooltip = null
+                hoveredTooltipAnchorRight = false
+              }
             }}
           >
           <UiEntity
